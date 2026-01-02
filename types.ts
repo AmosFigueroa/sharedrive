@@ -16,12 +16,16 @@ export interface FolderContent {
   name: string;
   files: DriveFile[];
   path: { id: string; name: string }[];
+  // Added for persistent branding
+  shareLabel?: string;
+  shareLogo?: string;
 }
 
 export interface ShareLink {
   id: string;
   folderId: string;
   label: string;
+  logoUrl?: string; // New field
   created: string;
   clicks: number;
 }

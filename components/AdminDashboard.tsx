@@ -4,7 +4,7 @@ import { ShareLink, FolderContent, DriveFile } from '../types';
 import { createShare, getShares, deleteShare, getFolderContents } from '../services/apiService';
 import { 
   Plus, Trash2, Copy, ExternalLink, FolderLock, LogOut, Loader2, RefreshCw, 
-  Search, Folder, ChevronRight, X, CheckCircle2, ArrowLeft, CheckSquare, Square, Check 
+  Search, Folder, ChevronRight, X, CheckCircle2, ArrowLeft, CheckSquare, Square, Check, Link as LinkIcon, Image as ImageIcon
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -20,6 +20,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   // Form State
   const [newLabel, setNewLabel] = useState('');
   const [newFolderId, setNewFolderId] = useState('');
+  const [customPath, setCustomPath] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
 
   // Picker State
   const [showPicker, setShowPicker] = useState(false);
@@ -89,15 +91,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     if (!newLabel || !newFolderId) return;
 
     setCreating(true);
-    const res = await createShare(token, newFolderId, newLabel);
+    const res = await createShare(token, newFolderId, newLabel, customPath, logoUrl);
     setCreating(false);
 
     if (res.success) {
       setNewLabel('');
       setNewFolderId('');
+      setCustomPath('');
+      setLogoUrl('');
       fetchShares();
     } else {
-      alert(res.error || "Failed to create share. Check Folder ID.");
+      alert(res.error || "Failed to create share. The custom link name might be taken.");
     }
   };
 
@@ -106,11 +110,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     let extractedId = input;
     
     // Advanced Logic: Detect Multiple URLs or IDs pasted at once
-    // Finds all occurrences of folder IDs in a string
     const matches = [...input.matchAll(/(?:folders\/|id=)([\w-]+)/g)];
     
     if (matches.length > 0) {
-      // Join all found IDs with commas
       extractedId = matches.map(m => m[1]).join(',');
     }
     
@@ -156,21 +158,53 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <Plus className="w-5 h-5 text-blue-400" /> Create New Share
           </h2>
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            <div className="md:col-span-4">
-              <input 
-                type="text" 
-                placeholder="Client Name / Label"
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
-              />
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Client / Label (Page Title)</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. PT Maju Jaya Files"
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    className="w-full bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
+                  />
+               </div>
+               
+               <div>
+                 <label className="text-xs text-slate-400 mb-1 block">Custom Link Name (Optional)</label>
+                 <div className="relative">
+                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">?share=</div>
+                   <input 
+                      type="text" 
+                      placeholder="client-name"
+                      value={customPath}
+                      onChange={(e) => setCustomPath(e.target.value.replace(/[^a-zA-Z0-9-_]/g, ''))}
+                      className="w-full bg-slate-800/50 border border-slate-600 rounded-xl pl-16 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
+                    />
+                 </div>
+               </div>
             </div>
-            
-            <div className="md:col-span-5 relative">
-              <input 
+
+            <div>
+               <label className="text-xs text-slate-400 mb-1 block">Logo URL (Optional)</label>
+               <div className="relative">
+                 <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
+                 <input 
+                    type="text" 
+                    placeholder="https://example.com/logo.png"
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                    className="w-full bg-slate-800/50 border border-slate-600 rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
+                  />
+               </div>
+            </div>
+
+            <div className="relative">
+               <label className="text-xs text-slate-400 mb-1 block">Folder ID(s)</label>
+               <input 
                 type="text" 
-                placeholder="Folder IDs (comma separated)"
+                placeholder="Folder ID or paste Drive Link(s)..."
                 value={newFolderId}
                 onChange={handleFolderIdChange}
                 className="w-full bg-slate-800/50 border border-slate-600 rounded-xl pl-4 pr-12 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white font-mono text-sm"
@@ -178,25 +212,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
               <button 
                 type="button"
                 onClick={() => setShowPicker(true)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
+                className="absolute right-2 top-8 p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
                 title="Browse Drive"
               >
                 <Search className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="md:col-span-3">
-              <button 
-                type="submit" 
-                disabled={creating || !newLabel || !newFolderId}
-                className="w-full h-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {creating ? <Loader2 className="animate-spin w-5 h-5" /> : "Generate Link"}
-              </button>
-            </div>
+            <button 
+              type="submit" 
+              disabled={creating || !newLabel || !newFolderId}
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+            >
+              {creating ? <Loader2 className="animate-spin w-5 h-5" /> : "Generate Link"}
+            </button>
           </form>
           <p className="text-xs text-slate-500 mt-3 ml-1">
-            * You can paste multiple Drive links at once, or use the picker to select multiple folders.
+            * <b>Label</b> will be used as the permanent Page Title.<br/>
+            * <b>Custom Link Name</b> creates pretty URLs (e.g. ?share=ProjectA).
           </p>
         </div>
 
@@ -220,12 +253,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
               <div key={share.id} className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group hover:bg-slate-800/60 transition-colors">
                 
                 <div className="flex-1 overflow-hidden">
-                   <h4 className="font-bold text-lg text-white mb-1">{share.label}</h4>
-                   <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
-                     <span className="bg-slate-800 px-2 py-1 rounded border border-slate-700 truncate max-w-[200px]" title={share.folderId}>
-                        Folder(s): {share.folderId}
+                   <div className="flex items-center gap-3">
+                      {share.logoUrl && <img src={share.logoUrl} className="w-8 h-8 rounded object-contain bg-white/10" alt="logo" />}
+                      <h4 className="font-bold text-lg text-white mb-1">{share.label}</h4>
+                   </div>
+                   <div className="flex flex-col gap-1 text-xs text-slate-400 font-mono mt-1">
+                     <span className="flex items-center gap-2">
+                        <LinkIcon className="w-3 h-3" /> 
+                        <span className="text-blue-400 bg-blue-500/10 px-1 rounded">?share={share.id}</span>
                      </span>
-                     <span>Created: {new Date(share.created).toLocaleDateString()}</span>
+                     <span title={share.folderId} className="truncate max-w-[300px] opacity-70">
+                        Target: {share.folderId}
+                     </span>
                    </div>
                 </div>
 

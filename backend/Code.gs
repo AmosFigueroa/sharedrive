@@ -22,7 +22,7 @@ function doPost(e) {
     } else if (action === 'getFiles') {
       return getFiles(data.token, data.folderId, data.shareId);
     } else if (action === 'createShare') {
-      return createShare(data.token, data.folderId, data.label);
+      return createShare(data.token, data.folderId, data.label, data.customPath, data.logoUrl);
     } else if (action === 'getShares') {
       return getShares(data.token);
     } else if (action === 'deleteShare') {
@@ -51,10 +51,10 @@ function saveShareStore(store) {
   PropertiesService.getScriptProperties().setProperty('SHARES', JSON.stringify(store));
 }
 
-function createShare(token, folderId, label) {
+function createShare(token, folderId, label, customPath, logoUrl) {
   if (!token) return jsonResponse({ success: false, error: "Unauthorized" });
   
-  // Validate folder existence (Handle multiple IDs split by comma)
+  // Validate folder existence
   const ids = folderId.split(',').map(id => id.trim());
   try {
     ids.forEach(id => DriveApp.getFolderById(id));
@@ -63,12 +63,26 @@ function createShare(token, folderId, label) {
   }
 
   const store = getShareStore();
-  const shareId = Utilities.getUuid();
+  let shareId;
+
+  // CUSTOM PATH LOGIC
+  if (customPath && customPath.trim() !== "") {
+    // Sanitize: allow alphanumeric, dash, underscore
+    shareId = customPath.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+    
+    // Check if taken
+    if (store[shareId]) {
+      return jsonResponse({ success: false, error: "Custom Link Name is already taken. Try another." });
+    }
+  } else {
+    shareId = Utilities.getUuid();
+  }
   
   store[shareId] = {
     id: shareId,
-    folderId: folderId, // Stores "id1,id2,id3"
+    folderId: folderId, 
     label: label,
+    logoUrl: logoUrl || "", // Store Logo URL
     created: new Date().toISOString(),
     clicks: 0
   };
@@ -80,7 +94,6 @@ function createShare(token, folderId, label) {
 function getShares(token) {
   if (!token) return jsonResponse({ success: false, error: "Unauthorized" });
   const store = getShareStore();
-  // Convert object to array
   const list = Object.keys(store).map(key => store[key]).reverse();
   return jsonResponse({ success: true, data: list });
 }
@@ -101,6 +114,8 @@ function deleteShare(token, shareId) {
 function getFiles(token, folderId, shareId) {
   let targetId = folderId;
   let rootRestriction = null;
+  let shareLabel = null;
+  let shareLogo = null;
 
   // SCENARIO 1: Client Access via Share Link
   if (shareId) {
@@ -111,12 +126,14 @@ function getFiles(token, folderId, shareId) {
       return jsonResponse({ success: false, error: "Link expired or invalid." });
     }
     
-    // If initial load (targetId is empty or root), use the stored ID(s)
+    // Capture Share Metadata for Branding
+    shareLabel = shareData.label;
+    shareLogo = shareData.logoUrl;
+
     if (!targetId || targetId === 'root') {
       targetId = shareData.folderId;
     }
     
-    // Set restriction
     rootRestriction = shareData.folderId;
   } 
   // SCENARIO 2: Admin Access
@@ -131,14 +148,11 @@ function getFiles(token, folderId, shareId) {
       const ids = targetId.split(',').map(id => id.trim());
       const filesArray = [];
       
-      // Fetch each folder and add it to the file list
       ids.forEach(id => {
         try {
           const folder = DriveApp.getFolderById(id);
           filesArray.push(formatFile(folder, true));
-        } catch(e) {
-          // Ignore invalid folders in the list
-        }
+        } catch(e) {}
       });
 
       return jsonResponse({ 
@@ -147,7 +161,9 @@ function getFiles(token, folderId, shareId) {
           id: targetId,
           name: "Shared Collection",
           path: [{ id: targetId, name: "Home" }],
-          files: filesArray
+          files: filesArray,
+          shareLabel: shareLabel, // Pass to frontend
+          shareLogo: shareLogo    // Pass to frontend
         }
       });
     }
@@ -165,7 +181,9 @@ function getFiles(token, folderId, shareId) {
       id: targetId,
       name: folder.getName(),
       path: buildPath(folder, rootRestriction),
-      files: []
+      files: [],
+      shareLabel: shareLabel, // Pass to frontend
+      shareLogo: shareLogo    // Pass to frontend
     };
     
     const subfolders = folder.getFolders();
@@ -226,10 +244,25 @@ function verifyOtp(email, otp) {
 function formatFile(driveItem, isFolder) {
   let downloadUrl = "";
   let thumbnailUrl = "";
+  
   if (!isFolder) {
     try { downloadUrl = driveItem.getDownloadUrl().replace("&gd=true", ""); } catch(e) { downloadUrl = driveItem.getUrl(); }
-    try { thumbnailUrl = driveItem.getThumbnail(); } catch(e) {}
+    
+    // FIX: Generate Base64 Thumbnail to ensure it loads on all domains
+    try { 
+      // Only get thumbnail for images/videos to save performance
+      const mime = driveItem.getMimeType();
+      if (mime.indexOf('image') > -1 || mime.indexOf('video') > -1) {
+         const thumbBlob = driveItem.getThumbnail();
+         if (thumbBlob) {
+            thumbnailUrl = "data:image/png;base64," + Utilities.base64Encode(thumbBlob.getBytes());
+         }
+      }
+    } catch(e) {
+      // Fallback: If no thumbnail exists, leave empty
+    }
   }
+
   return {
     id: driveItem.getId(),
     name: driveItem.getName(),
@@ -247,9 +280,7 @@ function buildPath(folder, stopAtId) {
   let path = [];
   let current = folder;
   
-  // If we are currently in a multi-folder root context (stopAtId has commas)
   if (stopAtId && stopAtId.includes(',')) {
-    // If the current folder ID is one of the roots, we stop here
     if (stopAtId.includes(current.getId())) {
        path.unshift({ id: stopAtId, name: "Shared Collection" });
        return path;
@@ -259,15 +290,11 @@ function buildPath(folder, stopAtId) {
   for(let i=0; i<6; i++) {
     try {
       path.unshift({ id: current.getId(), name: current.getName() });
-      
-      // Stop logic
       if (stopAtId && current.getId() === stopAtId) {
          path[0].name = "Shared Home";
          break;
       }
-      
       if (current.getId() === ROOT_FOLDER_ID && ROOT_FOLDER_ID !== 'root') break;
-      
       const parents = current.getParents();
       if (parents.hasNext()) {
         current = parents.next();
@@ -277,7 +304,6 @@ function buildPath(folder, stopAtId) {
     } catch(e) { break; }
   }
   
-  // Clean up root naming for Admin
   if (!stopAtId && path.length > 0 && path[0].id === ROOT_FOLDER_ID) {
      path[0].name = "My Drive";
      path[0].id = "root";

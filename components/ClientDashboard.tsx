@@ -5,7 +5,7 @@ import { getFolderContents } from '../services/apiService';
 import { 
   Folder, FileText, Image as ImageIcon, Video, FileSpreadsheet, 
   Download, Search, Grid, List, ChevronRight, Loader2, AlertCircle, 
-  ArrowLeft, LayoutGrid, X, ChevronLeft, ZoomIn, ZoomOut, RotateCcw, Maximize2
+  ArrowLeft, LayoutGrid, X, ChevronLeft, ZoomIn, ZoomOut, RotateCcw, Maximize2, Home
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -26,6 +26,10 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Persistent Branding State
+  const [pageTitle, setPageTitle] = useState<string>('');
+  const [pageLogo, setPageLogo] = useState<string | undefined>(undefined);
+
   // Lightbox State
   const [previewFile, setPreviewFile] = useState<DriveFile | null>(null);
   
@@ -45,6 +49,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     
     if (res.success && res.data) {
       setFolderData(res.data);
+      // Update persistent branding only if available and not set yet (or update always to be safe)
+      if (res.data.shareLabel) setPageTitle(res.data.shareLabel);
+      if (res.data.shareLogo) setPageLogo(res.data.shareLogo);
     } else {
       setError(res.error || "This link may have expired or is invalid.");
       setFolderData(null);
@@ -142,9 +149,10 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     window.open(file.downloadUrl, '_blank');
   };
 
-  // Helper to get high-res image url from thumbnail url
-  const getHighResUrl = (thumbnailUrl: string) => {
-    // Force high resolution
+  const getPreviewUrl = (thumbnailUrl: string) => {
+    if (thumbnailUrl.startsWith('data:')) {
+      return thumbnailUrl;
+    }
     return thumbnailUrl.replace(/=s\d+.*$/, '=s0');
   };
 
@@ -215,29 +223,15 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     <div className="flex h-screen bg-slate-900 overflow-hidden flex-col font-sans">
       
       {/* Header */}
-      <header className="glass z-20 border-b border-slate-700/50 flex-shrink-0">
+      <header className="glass z-20 border-b border-slate-700/50 flex-shrink-0 flex flex-col">
+        {/* Top Bar: Title & Search */}
         <div className="px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {!isRoot && !loading && (
-              <button 
-                onClick={handleNavigateUp}
-                className="p-2 rounded-full hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                title="Back"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-            )}
-            
-            <div className="flex flex-col">
+             {/* Main Title: STATIC (Based on Share Label) */}
+             <div className="flex flex-col">
               <span className="font-bold text-lg text-white tracking-tight">
-                {folderData ? folderData.name : 'Gallery'}
+                {pageTitle || (folderData ? folderData.name : 'Loading...')}
               </span>
-              {!isRoot && folderData && (
-                <span className="text-xs text-slate-400 flex items-center gap-1">
-                   <LayoutGrid className="w-3 h-3" /> 
-                   In: {folderData.path[folderData.path.length - 2]?.name}
-                </span>
-              )}
             </div>
           </div>
 
@@ -260,6 +254,44 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                <button onClick={() => setViewMode(ViewMode.LIST)} className={`p-1.5 rounded-md transition-colors ${viewMode === ViewMode.LIST ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}><List className="w-4 h-4"/></button>
              </div>
           </div>
+        </div>
+
+        {/* Bottom Bar: Logo & Breadcrumbs Navigation */}
+        <div className="px-4 sm:px-6 py-2 bg-slate-800/30 flex items-center gap-4 border-t border-white/5">
+            {/* Logo Section */}
+            {pageLogo && (
+               <div className="flex-shrink-0 mr-2 border-r border-slate-700 pr-4">
+                  <img src={pageLogo} alt="Logo" className="h-8 w-auto object-contain" />
+               </div>
+            )}
+
+            {/* Breadcrumb Navigation */}
+            <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide flex-1">
+              {!isRoot && !loading && (
+                <button 
+                  onClick={handleNavigateUp}
+                  className="p-1 rounded-full hover:bg-slate-700 text-slate-300 hover:text-white transition-colors mr-1"
+                  title="Back"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
+
+              <nav className="flex items-center text-sm text-slate-400">
+                {folderData?.path.map((p, idx) => (
+                  <React.Fragment key={p.id}>
+                    {idx > 0 && <ChevronRight className="w-4 h-4 mx-1 flex-shrink-0 text-slate-600" />}
+                    <button 
+                      onClick={() => setCurrentFolder(p.id)}
+                      className={`hover:text-blue-400 transition-colors flex items-center gap-1.5 px-2 py-1 rounded hover:bg-slate-800 ${idx === folderData.path.length - 1 ? 'text-white font-medium bg-slate-800/50 border border-slate-700/50' : ''}`}
+                    >
+                      {idx === 0 ? <Home className="w-3 h-3" /> : null}
+                      {p.name}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </nav>
+            </div>
         </div>
       </header>
 
@@ -301,13 +333,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                            <img 
                             src={file.thumbnailUrl} 
                             alt={file.name} 
-                            referrerPolicy="no-referrer"
+                            // removed onError that hides image, as Base64 is reliable
                             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" 
-                            onError={(e) => {
-                                // Fallback if image fails to load
-                                e.currentTarget.style.display = 'none';
-                                e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
-                            }}
                            />
                          ) : (
                             <div className="transform group-hover:scale-110 transition-transform duration-300">
@@ -436,9 +463,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                     onMouseLeave={handleMouseUp}
                   >
                     <img 
-                      src={getHighResUrl(previewFile.thumbnailUrl)} 
+                      src={getPreviewUrl(previewFile.thumbnailUrl)} 
                       alt={previewFile.name} 
-                      referrerPolicy="no-referrer"
                       className="max-w-full max-h-full object-contain transition-transform duration-75 ease-out select-none"
                       draggable={false}
                       style={{

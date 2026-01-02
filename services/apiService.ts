@@ -35,7 +35,6 @@ export const verifyOtp = async (email: string, otp: string): Promise<ApiResponse
 
 export const getFolderContents = async (folderId: string, token: string | null, shareId?: string): Promise<ApiResponse<FolderContent>> => {
   if (MOCK_DATA) {
-     // Mock data implementation omitted for brevity, assuming backend is used
      return { success: false, error: "Mock data not fully implemented for shares" };
   }
   return apiCall({ action: 'getFiles', folderId, token, shareId });
@@ -48,9 +47,9 @@ export const getShares = async (token: string): Promise<ApiResponse<ShareLink[]>
   return apiCall({ action: 'getShares', token });
 };
 
-export const createShare = async (token: string, folderId: string, label: string): Promise<ApiResponse<ShareLink>> => {
-  if (MOCK_DATA) return { success: true, data: { id: '123', folderId, label, created: new Date().toISOString(), clicks: 0 } };
-  return apiCall({ action: 'createShare', token, folderId, label });
+export const createShare = async (token: string, folderId: string, label: string, customPath?: string, logoUrl?: string): Promise<ApiResponse<ShareLink>> => {
+  if (MOCK_DATA) return { success: true, data: { id: customPath || '123', folderId, label, created: new Date().toISOString(), clicks: 0 } };
+  return apiCall({ action: 'createShare', token, folderId, label, customPath, logoUrl });
 };
 
 export const deleteShare = async (token: string, shareId: string): Promise<ApiResponse<string>> => {
