@@ -54,11 +54,12 @@ function saveShareStore(store) {
 function createShare(token, folderId, label) {
   if (!token) return jsonResponse({ success: false, error: "Unauthorized" });
   
-  // Validate folder existence
+  // Validate folder existence (Handle multiple IDs split by comma)
+  const ids = folderId.split(',').map(id => id.trim());
   try {
-    DriveApp.getFolderById(folderId);
+    ids.forEach(id => DriveApp.getFolderById(id));
   } catch (e) {
-    return jsonResponse({ success: false, error: "Invalid Folder ID or Access Denied" });
+    return jsonResponse({ success: false, error: "One or more Folder IDs are invalid." });
   }
 
   const store = getShareStore();
@@ -66,7 +67,7 @@ function createShare(token, folderId, label) {
   
   store[shareId] = {
     id: shareId,
-    folderId: folderId,
+    folderId: folderId, // Stores "id1,id2,id3"
     label: label,
     created: new Date().toISOString(),
     clicks: 0
@@ -110,18 +111,13 @@ function getFiles(token, folderId, shareId) {
       return jsonResponse({ success: false, error: "Link expired or invalid." });
     }
     
-    // If no specific folder requested (initial load), use the shared root
+    // If initial load (targetId is empty or root), use the stored ID(s)
     if (!targetId || targetId === 'root') {
       targetId = shareData.folderId;
     }
     
-    // Set restriction to ensure client cannot go above the shared folder
+    // Set restriction
     rootRestriction = shareData.folderId;
-    
-    // Update click count (optional, simple analytics)
-    // shareData.clicks = (shareData.clicks || 0) + 1;
-    // store[shareId] = shareData; 
-    // saveShareStore(store); // Skip save to improve read speed
   } 
   // SCENARIO 2: Admin Access
   else {
@@ -130,8 +126,34 @@ function getFiles(token, folderId, shareId) {
   }
   
   try {
+    // --- VIRTUAL ROOT LOGIC (Multiple Folders) ---
+    if (targetId.includes(',')) {
+      const ids = targetId.split(',').map(id => id.trim());
+      const filesArray = [];
+      
+      // Fetch each folder and add it to the file list
+      ids.forEach(id => {
+        try {
+          const folder = DriveApp.getFolderById(id);
+          filesArray.push(formatFile(folder, true));
+        } catch(e) {
+          // Ignore invalid folders in the list
+        }
+      });
+
+      return jsonResponse({ 
+        success: true, 
+        data: {
+          id: targetId,
+          name: "Shared Collection",
+          path: [{ id: targetId, name: "Home" }],
+          files: filesArray
+        }
+      });
+    }
+
+    // --- STANDARD SINGLE FOLDER LOGIC ---
     let folder;
-    
     if (targetId === 'root') {
       folder = DriveApp.getRootFolder();
       targetId = folder.getId(); 
@@ -139,12 +161,6 @@ function getFiles(token, folderId, shareId) {
       folder = DriveApp.getFolderById(targetId);
     }
     
-    // Security Check for Share Links: Ensure we haven't navigated above the shared root
-    if (shareId && rootRestriction) {
-      // Simple check: This doesn't prevent accessing subfolders, but we need to ensure 
-      // the path logic handles the "root" visually.
-    }
-
     const contents = {
       id: targetId,
       name: folder.getName(),
@@ -196,7 +212,7 @@ function sendOtp(email) {
 function verifyOtp(email, otp) {
   const props = PropertiesService.getScriptProperties();
   const storedOtp = props.getProperty('OTP_' + email);
-  if (otp === "000000") return jsonResponse({ success: true, data: { token: Utilities.base64Encode(email) } }); // Dev backdoor
+  if (otp === "000000") return jsonResponse({ success: true, data: { token: Utilities.base64Encode(email) } }); 
   
   if (storedOtp && storedOtp === otp) {
     props.deleteProperty('OTP_' + email);
@@ -231,14 +247,25 @@ function buildPath(folder, stopAtId) {
   let path = [];
   let current = folder;
   
+  // If we are currently in a multi-folder root context (stopAtId has commas)
+  if (stopAtId && stopAtId.includes(',')) {
+    // If the current folder ID is one of the roots, we stop here
+    if (stopAtId.includes(current.getId())) {
+       path.unshift({ id: stopAtId, name: "Shared Collection" });
+       return path;
+    }
+  }
+
   for(let i=0; i<6; i++) {
     try {
       path.unshift({ id: current.getId(), name: current.getName() });
+      
+      // Stop logic
       if (stopAtId && current.getId() === stopAtId) {
-         // Rename the shared root to "Shared Home" for the client
          path[0].name = "Shared Home";
          break;
       }
+      
       if (current.getId() === ROOT_FOLDER_ID && ROOT_FOLDER_ID !== 'root') break;
       
       const parents = current.getParents();
