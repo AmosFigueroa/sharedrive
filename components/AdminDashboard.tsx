@@ -1,12 +1,12 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ShareLink, FolderContent, DriveFile } from '../types';
-import { createShare, getShares, deleteShare, getFolderContents } from '../services/apiService';
+import { createShare, updateShare, getShares, deleteShare, getFolderContents } from '../services/apiService';
 import { useUI } from '../contexts/UIContext';
 import { 
   Plus, Trash2, Copy, ExternalLink, FolderLock, LogOut, Loader2, RefreshCw, 
   Search, Folder, ChevronRight, X, CheckCircle2, ArrowLeft, CheckSquare, Square, Check, Link as LinkIcon, Image as ImageIcon,
-  Sun, Moon
+  Sun, Moon, Pencil, Save
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -21,6 +21,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   const [creating, setCreating] = useState(false);
   
   // Form State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingShareId, setEditingShareId] = useState<string | null>(null);
+  
   const [newLabel, setNewLabel] = useState('');
   const [newFolderId, setNewFolderId] = useState('');
   const [customPath, setCustomPath] = useState('');
@@ -32,6 +35,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   const [pickerData, setPickerData] = useState<FolderContent | null>(null);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const formRef = useRef<HTMLDivElement>(null);
 
   const fetchShares = async () => {
     setLoading(true);
@@ -90,7 +95,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setNewLabel(val);
-    if (!customPathTouched) {
+    if (!customPathTouched && !isEditing) {
       const slug = val.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       setCustomPath(slug);
     }
@@ -101,24 +106,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     setCustomPath(e.target.value.replace(/[^a-zA-Z0-9-_]/g, ''));
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setNewLabel('');
+    setNewFolderId('');
+    setCustomPath('');
+    setLogoUrl('');
+    setCustomPathTouched(false);
+    setIsEditing(false);
+    setEditingShareId(null);
+  };
+
+  const handleStartEdit = (share: ShareLink) => {
+    setIsEditing(true);
+    setEditingShareId(share.id);
+    setNewLabel(share.label);
+    setNewFolderId(share.folderId);
+    setCustomPath(share.id);
+    setLogoUrl(share.logoUrl || '');
+    setCustomPathTouched(true); // Don't auto-update path when editing label
+    
+    // Scroll to form
+    formRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLabel || !newFolderId) return;
 
     setCreating(true);
-    const res = await createShare(token, newFolderId, newLabel, customPath, logoUrl);
+    
+    let res;
+    if (isEditing && editingShareId) {
+      res = await updateShare(token, editingShareId, newFolderId, newLabel, customPath, logoUrl);
+    } else {
+      res = await createShare(token, newFolderId, newLabel, customPath, logoUrl);
+    }
+    
     setCreating(false);
 
     if (res.success) {
-      setNewLabel('');
-      setNewFolderId('');
-      setCustomPath('');
-      setLogoUrl('');
-      setCustomPathTouched(false);
+      resetForm();
       fetchShares();
-      showToast("Link created successfully!", 'success');
+      showToast(isEditing ? "Link updated successfully!" : "Link created successfully!", 'success');
     } else {
-      showToast(res.error || "Failed to create share.", 'error');
+      showToast(res.error || "Operation failed.", 'error');
     }
   };
 
@@ -138,6 +169,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     if (res.success) {
       setShares(prev => prev.filter(s => s.id !== id));
       showToast("Link deleted.", 'info');
+      if (editingShareId === id) resetForm();
     } else {
       showToast("Failed to delete link.", 'error');
     }
@@ -178,12 +210,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
           </div>
         </div>
 
-        {/* Create New Share Card */}
-        <div className="glass rounded-2xl p-6 mb-8 border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/20">
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-            <Plus className="w-5 h-5 text-blue-500" /> Create New Share
-          </h2>
-          <form onSubmit={handleCreate} className="space-y-4">
+        {/* Create/Edit Card */}
+        <div ref={formRef} className={`glass rounded-2xl p-6 mb-8 border transition-all duration-300 ${isEditing ? 'border-amber-400 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-900/10' : 'border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/20'}`}>
+          <div className="flex justify-between items-center mb-4">
+             <h2 className={`text-lg font-semibold flex items-center gap-2 ${isEditing ? 'text-amber-600 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`}>
+               {isEditing ? <Pencil className="w-5 h-5" /> : <Plus className="w-5 h-5 text-blue-500" />} 
+               {isEditing ? "Edit Shared Link" : "Create New Share"}
+             </h2>
+             {isEditing && (
+                <button onClick={resetForm} className="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white underline">
+                   Cancel Edit
+                </button>
+             )}
+          </div>
+          
+          <form onSubmit={handleFormSubmit} className="space-y-4">
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                <div className="md:col-span-2">
@@ -221,7 +262,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div>
-                 <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Custom Link Name</label>
+                 <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Custom Link Name (Slug)</label>
                  <div className="relative group">
                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-mono group-focus-within:text-blue-500">?share=</div>
                    <input 
@@ -257,9 +298,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
             <button 
               type="submit" 
               disabled={creating || !newLabel || !newFolderId}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2 shadow-lg shadow-blue-500/20"
+              className={`w-full font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2 shadow-lg ${isEditing ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/20'}`}
             >
-              {creating ? <Loader2 className="animate-spin w-5 h-5" /> : "Generate Secure Link"}
+              {creating ? <Loader2 className="animate-spin w-5 h-5" /> : (isEditing ? <><Save className="w-5 h-5" /> Update Link</> : "Generate Secure Link")}
             </button>
           </form>
         </div>
@@ -281,7 +322,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
         ) : (
           <div className="grid gap-4">
             {shares.map(share => (
-              <div key={share.id} className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 group hover:shadow-md dark:hover:bg-slate-800/60 transition-all">
+              <div key={share.id} className={`bg-white dark:bg-slate-800/40 border rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 group hover:shadow-md transition-all ${isEditing && editingShareId === share.id ? 'border-amber-400 dark:border-amber-500' : 'border-slate-200 dark:border-slate-700/50'}`}>
                 
                 {/* Logo & Label Section */}
                 <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
@@ -314,6 +355,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
                      <Copy className="w-4 h-4" /> Copy
                    </button>
                    
+                   <button 
+                     onClick={() => handleStartEdit(share)}
+                     className="p-2 text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors border border-transparent hover:border-amber-200 dark:hover:border-amber-600/30"
+                     title="Edit"
+                   >
+                     <Pencil className="w-5 h-5" />
+                   </button>
+
                    <a 
                      href={`?share=${share.id}`}
                      target="_blank"

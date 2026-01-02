@@ -52,6 +52,11 @@ export const createShare = async (token: string, folderId: string, label: string
   return apiCall({ action: 'createShare', token, folderId, label, customPath, logoUrl });
 };
 
+export const updateShare = async (token: string, shareId: string, folderId: string, label: string, customPath?: string, logoUrl?: string): Promise<ApiResponse<ShareLink>> => {
+  if (MOCK_DATA) return { success: true, data: { id: customPath || shareId, folderId, label, created: new Date().toISOString(), clicks: 0 } };
+  return apiCall({ action: 'updateShare', token, shareId, folderId, label, customPath, logoUrl });
+};
+
 export const deleteShare = async (token: string, shareId: string): Promise<ApiResponse<string>> => {
   if (MOCK_DATA) return { success: true, data: "Deleted" };
   return apiCall({ action: 'deleteShare', token, shareId });

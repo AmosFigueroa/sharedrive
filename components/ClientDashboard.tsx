@@ -144,27 +144,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
 
   const imageFiles = filteredFiles.filter(f => f.mimeType.startsWith('image/') && f.thumbnailUrl);
 
-  const isPreviewable = (mimeType: string) => {
-    return mimeType.startsWith('image/') || 
-           mimeType.startsWith('video/') || 
-           mimeType === 'application/pdf' ||
-           mimeType.includes('officedocument'); 
-  };
-
   const handleFileClick = (file: DriveFile) => {
-    const isMobile = window.innerWidth < 640; // Tailwind 'sm' breakpoint is 640px
-
     if (file.isFolder) {
       setCurrentFolder(file.id);
-    } else if (isMobile) {
-      // MOBILE SPECIFIC: Direct Download, skip preview
-      handleDownload(null, file);
-    } else if (isPreviewable(file.mimeType)) {
-      // DESKTOP: Open Preview
-      setPreviewFile(file);
     } else {
-      // DESKTOP: Fallback Download
-      handleDownload(null, file);
+      // Logic Update: Always open preview regardless of device.
+      // Download only happens if user clicks the download icon.
+      setPreviewFile(file);
     }
   };
 

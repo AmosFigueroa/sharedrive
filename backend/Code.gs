@@ -2,6 +2,7 @@
 // --- CONFIGURATION ---
 const ROOT_FOLDER_ID = "root"; 
 const ALLOWED_EMAILS = []; // Empty = open to all with OTP.
+const MAX_FILES_PER_PAGE = 40; // LIMIT TO SPEED UP LOADING
 
 // --- MAIN API HANDLER ---
 function doPost(e) {
@@ -23,6 +24,8 @@ function doPost(e) {
       return getFiles(data.token, data.folderId, data.shareId);
     } else if (action === 'createShare') {
       return createShare(data.token, data.folderId, data.label, data.customPath, data.logoUrl);
+    } else if (action === 'updateShare') {
+      return updateShare(data.token, data.shareId, data.folderId, data.label, data.customPath, data.logoUrl);
     } else if (action === 'getShares') {
       return getShares(data.token);
     } else if (action === 'deleteShare') {
@@ -82,7 +85,7 @@ function createShare(token, folderId, label, customPath, logoUrl) {
     id: shareId,
     folderId: folderId, 
     label: label,
-    logoUrl: logoUrl || "", // Store Logo URL
+    logoUrl: logoUrl || "", 
     created: new Date().toISOString(),
     clicks: 0
   };
@@ -90,6 +93,44 @@ function createShare(token, folderId, label, customPath, logoUrl) {
   saveShareStore(store);
   return jsonResponse({ success: true, data: store[shareId] });
 }
+
+function updateShare(token, currentShareId, folderId, label, customPath, logoUrl) {
+  if (!token) return jsonResponse({ success: false, error: "Unauthorized" });
+
+  const store = getShareStore();
+  if (!store[currentShareId]) {
+    return jsonResponse({ success: false, error: "Share ID not found." });
+  }
+
+  // Check if renaming (changing custom path)
+  let newShareId = currentShareId;
+  if (customPath && customPath.trim() !== "" && customPath !== currentShareId) {
+     const requestedId = customPath.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+     if (store[requestedId]) {
+       return jsonResponse({ success: false, error: "New Link Name is already taken." });
+     }
+     newShareId = requestedId;
+  }
+
+  // Update Data
+  const updatedData = {
+    ...store[currentShareId],
+    id: newShareId,
+    folderId: folderId,
+    label: label,
+    logoUrl: logoUrl || ""
+  };
+
+  // If ID changed, delete old key and add new key
+  if (newShareId !== currentShareId) {
+    delete store[currentShareId];
+  }
+  store[newShareId] = updatedData;
+
+  saveShareStore(store);
+  return jsonResponse({ success: true, data: updatedData });
+}
+
 
 function getShares(token) {
   if (!token) return jsonResponse({ success: false, error: "Unauthorized" });
@@ -148,12 +189,15 @@ function getFiles(token, folderId, shareId) {
       const ids = targetId.split(',').map(id => id.trim());
       const filesArray = [];
       
-      ids.forEach(id => {
+      let count = 0;
+      for (const id of ids) {
+        if (count >= MAX_FILES_PER_PAGE) break; // Limit virtual folder too
         try {
           const folder = DriveApp.getFolderById(id);
           filesArray.push(formatFile(folder, true));
+          count++;
         } catch(e) {}
-      });
+      }
 
       return jsonResponse({ 
         success: true, 
@@ -162,8 +206,8 @@ function getFiles(token, folderId, shareId) {
           name: "Shared Collection",
           path: [{ id: targetId, name: "Home" }],
           files: filesArray,
-          shareLabel: shareLabel, // Pass to frontend
-          shareLogo: shareLogo    // Pass to frontend
+          shareLabel: shareLabel, 
+          shareLogo: shareLogo
         }
       });
     }
@@ -182,18 +226,26 @@ function getFiles(token, folderId, shareId) {
       name: folder.getName(),
       path: buildPath(folder, rootRestriction),
       files: [],
-      shareLabel: shareLabel, // Pass to frontend
-      shareLogo: shareLogo    // Pass to frontend
+      shareLabel: shareLabel,
+      shareLogo: shareLogo
     };
     
+    let fileCount = 0;
+
+    // Get Folders
     const subfolders = folder.getFolders();
     while (subfolders.hasNext()) {
+      if (fileCount >= MAX_FILES_PER_PAGE) break;
       contents.files.push(formatFile(subfolders.next(), true));
+      fileCount++;
     }
     
+    // Get Files
     const files = folder.getFiles();
     while (files.hasNext()) {
+      if (fileCount >= MAX_FILES_PER_PAGE) break;
       contents.files.push(formatFile(files.next(), false));
+      fileCount++;
     }
     
     return jsonResponse({ success: true, data: contents });
@@ -246,20 +298,29 @@ function formatFile(driveItem, isFolder) {
   let thumbnailUrl = "";
   
   if (!isFolder) {
-    try { downloadUrl = driveItem.getDownloadUrl().replace("&gd=true", ""); } catch(e) { downloadUrl = driveItem.getUrl(); }
-    
-    // FIX: Generate Base64 Thumbnail to ensure it loads on all domains
+    // Optimization: getUrl is faster than getDownloadUrl sometimes, but we prefer download for UX.
+    // We wrap in try-catch to prevent one bad file from breaking the whole list
     try { 
-      // Only get thumbnail for images/videos to save performance
+       downloadUrl = driveItem.getDownloadUrl().replace("&gd=true", ""); 
+    } catch(e) { 
+       downloadUrl = driveItem.getUrl(); 
+    }
+    
+    // THUMBNAIL OPTIMIZATION
+    // Generating Base64 is slow. Only do it for images/videos and keep it simple.
+    try { 
       const mime = driveItem.getMimeType();
       if (mime.indexOf('image') > -1 || mime.indexOf('video') > -1) {
+         // Optimization: Using resizing to keep payload small if possible, 
+         // but GAS doesn't support resizing easily. We just get bytes.
+         // Warning: Large images can still timeout here.
          const thumbBlob = driveItem.getThumbnail();
          if (thumbBlob) {
             thumbnailUrl = "data:image/png;base64," + Utilities.base64Encode(thumbBlob.getBytes());
          }
       }
     } catch(e) {
-      // Fallback: If no thumbnail exists, leave empty
+      // Ignore thumbnail errors to speed up loading
     }
   }
 
@@ -287,6 +348,7 @@ function buildPath(folder, stopAtId) {
     }
   }
 
+  // Limit depth to avoid deep recursions slowing things down
   for(let i=0; i<6; i++) {
     try {
       path.unshift({ id: current.getId(), name: current.getName() });
