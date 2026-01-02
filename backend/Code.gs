@@ -2,7 +2,7 @@
 // --- CONFIGURATION ---
 const ROOT_FOLDER_ID = "root"; 
 const ALLOWED_EMAILS = []; // Empty = open to all with OTP.
-const MAX_FILES_PER_PAGE = 40; // LIMIT TO SPEED UP LOADING
+// REMOVED MAX_FILES_PER_PAGE to allow ALL files.
 
 // --- MAIN API HANDLER ---
 function doPost(e) {
@@ -70,10 +70,7 @@ function createShare(token, folderId, label, customPath, logoUrl) {
 
   // CUSTOM PATH LOGIC
   if (customPath && customPath.trim() !== "") {
-    // Sanitize: allow alphanumeric, dash, underscore
     shareId = customPath.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
-    
-    // Check if taken
     if (store[shareId]) {
       return jsonResponse({ success: false, error: "Custom Link Name is already taken. Try another." });
     }
@@ -102,7 +99,6 @@ function updateShare(token, currentShareId, folderId, label, customPath, logoUrl
     return jsonResponse({ success: false, error: "Share ID not found." });
   }
 
-  // Check if renaming (changing custom path)
   let newShareId = currentShareId;
   if (customPath && customPath.trim() !== "" && customPath !== currentShareId) {
      const requestedId = customPath.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
@@ -112,7 +108,6 @@ function updateShare(token, currentShareId, folderId, label, customPath, logoUrl
      newShareId = requestedId;
   }
 
-  // Update Data
   const updatedData = {
     ...store[currentShareId],
     id: newShareId,
@@ -121,7 +116,6 @@ function updateShare(token, currentShareId, folderId, label, customPath, logoUrl
     logoUrl: logoUrl || ""
   };
 
-  // If ID changed, delete old key and add new key
   if (newShareId !== currentShareId) {
     delete store[currentShareId];
   }
@@ -158,44 +152,30 @@ function getFiles(token, folderId, shareId) {
   let shareLabel = null;
   let shareLogo = null;
 
-  // SCENARIO 1: Client Access via Share Link
   if (shareId) {
     const store = getShareStore();
     const shareData = store[shareId];
+    if (!shareData) return jsonResponse({ success: false, error: "Link expired or invalid." });
     
-    if (!shareData) {
-      return jsonResponse({ success: false, error: "Link expired or invalid." });
-    }
-    
-    // Capture Share Metadata for Branding
     shareLabel = shareData.label;
     shareLogo = shareData.logoUrl;
-
-    if (!targetId || targetId === 'root') {
-      targetId = shareData.folderId;
-    }
-    
+    if (!targetId || targetId === 'root') targetId = shareData.folderId;
     rootRestriction = shareData.folderId;
-  } 
-  // SCENARIO 2: Admin Access
-  else {
+  } else {
     if (!token) return jsonResponse({ success: false, error: "Session expired." });
     if (!targetId || targetId === 'root') targetId = ROOT_FOLDER_ID;
   }
   
   try {
-    // --- VIRTUAL ROOT LOGIC (Multiple Folders) ---
+    // SCENARIO 1: Virtual Root (Multiple IDs)
     if (targetId.includes(',')) {
       const ids = targetId.split(',').map(id => id.trim());
       const filesArray = [];
       
-      let count = 0;
       for (const id of ids) {
-        if (count >= MAX_FILES_PER_PAGE) break; // Limit virtual folder too
         try {
           const folder = DriveApp.getFolderById(id);
           filesArray.push(formatFile(folder, true));
-          count++;
         } catch(e) {}
       }
 
@@ -212,7 +192,7 @@ function getFiles(token, folderId, shareId) {
       });
     }
 
-    // --- STANDARD SINGLE FOLDER LOGIC ---
+    // SCENARIO 2: Single Folder
     let folder;
     if (targetId === 'root') {
       folder = DriveApp.getRootFolder();
@@ -230,22 +210,16 @@ function getFiles(token, folderId, shareId) {
       shareLogo: shareLogo
     };
     
-    let fileCount = 0;
-
-    // Get Folders
+    // FETCH ALL FOLDERS
     const subfolders = folder.getFolders();
     while (subfolders.hasNext()) {
-      if (fileCount >= MAX_FILES_PER_PAGE) break;
       contents.files.push(formatFile(subfolders.next(), true));
-      fileCount++;
     }
     
-    // Get Files
+    // FETCH ALL FILES
     const files = folder.getFiles();
     while (files.hasNext()) {
-      if (fileCount >= MAX_FILES_PER_PAGE) break;
       contents.files.push(formatFile(files.next(), false));
-      fileCount++;
     }
     
     return jsonResponse({ success: true, data: contents });
@@ -256,16 +230,11 @@ function getFiles(token, folderId, shareId) {
 }
 
 function sendOtp(email) {
-  if (!email || !isValidEmail(email)) {
-    return jsonResponse({ success: false, error: "Invalid Email Address" });
-  }
-  if (ALLOWED_EMAILS.length > 0 && !ALLOWED_EMAILS.includes(email)) {
-    return jsonResponse({ success: false, error: "Access Denied" });
-  }
+  if (!email || !isValidEmail(email)) return jsonResponse({ success: false, error: "Invalid Email" });
+  if (ALLOWED_EMAILS.length > 0 && !ALLOWED_EMAILS.includes(email)) return jsonResponse({ success: false, error: "Access Denied" });
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const props = PropertiesService.getScriptProperties();
-  props.setProperty('OTP_' + email, otp);
+  PropertiesService.getScriptProperties().setProperty('OTP_' + email, otp);
   
   try {
     MailApp.sendEmail({
@@ -291,41 +260,29 @@ function verifyOtp(email, otp) {
   return jsonResponse({ success: false, error: "Invalid code" });
 }
 
-// --- HELPERS ---
+// --- OPTIMIZED HELPERS ---
 
 function formatFile(driveItem, isFolder) {
-  let downloadUrl = "";
-  let thumbnailUrl = "";
+  // CRITICAL OPTIMIZATION:
+  // 1. DO NOT fetch Blob/Thumbnail via backend (Time complexity: High)
+  // 2. DO NOT use getDownloadUrl() if getUrl() suffices (Time complexity: Medium)
+  // 3. Construct URLs via string manipulation where possible (Time complexity: O(1))
   
+  const id = driveItem.getId();
+  let thumbnailUrl = "";
+  let downloadUrl = "";
+
   if (!isFolder) {
-    // Optimization: getUrl is faster than getDownloadUrl sometimes, but we prefer download for UX.
-    // We wrap in try-catch to prevent one bad file from breaking the whole list
-    try { 
-       downloadUrl = driveItem.getDownloadUrl().replace("&gd=true", ""); 
-    } catch(e) { 
-       downloadUrl = driveItem.getUrl(); 
-    }
+    // Use Google CDN for direct thumbnail access (Client-side rendering)
+    // =s400 means size 400px. This is INSTANT generation.
+    thumbnailUrl = `https://lh3.googleusercontent.com/d/${id}=s400`;
     
-    // THUMBNAIL OPTIMIZATION
-    // Generating Base64 is slow. Only do it for images/videos and keep it simple.
-    try { 
-      const mime = driveItem.getMimeType();
-      if (mime.indexOf('image') > -1 || mime.indexOf('video') > -1) {
-         // Optimization: Using resizing to keep payload small if possible, 
-         // but GAS doesn't support resizing easily. We just get bytes.
-         // Warning: Large images can still timeout here.
-         const thumbBlob = driveItem.getThumbnail();
-         if (thumbBlob) {
-            thumbnailUrl = "data:image/png;base64," + Utilities.base64Encode(thumbBlob.getBytes());
-         }
-      }
-    } catch(e) {
-      // Ignore thumbnail errors to speed up loading
-    }
+    // Use direct download link construction to avoid fetch overhead
+    downloadUrl = `https://drive.google.com/uc?export=download&id=${id}`;
   }
 
   return {
-    id: driveItem.getId(),
+    id: id,
     name: driveItem.getName(),
     mimeType: isFolder ? 'application/vnd.google-apps.folder' : driveItem.getMimeType(),
     size: isFolder ? 0 : driveItem.getSize(),
@@ -348,7 +305,6 @@ function buildPath(folder, stopAtId) {
     }
   }
 
-  // Limit depth to avoid deep recursions slowing things down
   for(let i=0; i<6; i++) {
     try {
       path.unshift({ id: current.getId(), name: current.getName() });
@@ -375,8 +331,7 @@ function buildPath(folder, stopAtId) {
 }
 
 function isValidEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function jsonResponse(data) {

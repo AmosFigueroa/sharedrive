@@ -57,6 +57,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
   const [searchQuery, setSearchQuery] = useState('');
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   
   // Persistent Branding State
   const [pageTitle, setPageTitle] = useState<string>('');
@@ -79,6 +80,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     setLoading(true);
     setSearchQuery('');
     setError(null);
+    setFailedImages(new Set()); // Reset failed images on new fetch
     
     // Pass null for token, provide shareId
     const res = await getFolderContents(folderId, null, shareId);
@@ -101,6 +103,10 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   useEffect(() => {
     setTransform({ scale: 1, x: 0, y: 0 });
   }, [previewFile]);
+
+  const handleImageError = (fileId: string) => {
+    setFailedImages(prev => new Set(prev).add(fileId));
+  };
 
   // Handle Scroll to toggle button visibility
   const handleScroll = () => {
@@ -195,6 +201,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     if (thumbnailUrl.startsWith('data:')) {
       return thumbnailUrl;
     }
+    // High res for lightbox
     return thumbnailUrl.replace(/=s\d+.*$/, '=s0');
   };
 
@@ -375,10 +382,11 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                     {viewMode === ViewMode.GRID ? (
                       <>
                         <div className="flex-1 w-full flex items-center justify-center relative overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-900/50 mb-3 shadow-inner">
-                          {file.thumbnailUrl ? (
+                          {file.thumbnailUrl && !failedImages.has(file.id) ? (
                             <img 
                               src={file.thumbnailUrl} 
                               alt={file.name} 
+                              onError={() => handleImageError(file.id)}
                               className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" 
                             />
                           ) : (
@@ -516,7 +524,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
              onWheel={handleWheel}
           >
              {previewFile.mimeType.startsWith('image/') ? (
-                previewFile.thumbnailUrl ? (
+                previewFile.thumbnailUrl && !failedImages.has(previewFile.id) ? (
                   <div 
                     className="w-full h-full flex items-center justify-center cursor-move"
                     onMouseDown={handleMouseDown}
@@ -527,6 +535,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                     <img 
                       src={getPreviewUrl(previewFile.thumbnailUrl)} 
                       alt={previewFile.name} 
+                      onError={() => handleImageError(previewFile.id)}
                       className="max-w-full max-h-full object-contain transition-transform duration-75 ease-out select-none"
                       draggable={false}
                       style={{
