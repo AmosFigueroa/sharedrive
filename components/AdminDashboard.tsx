@@ -51,6 +51,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     }
   };
 
+  const handleFolderIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value;
+    // Logic to extract ID if a full URL is pasted
+    let extractedId = input;
+    
+    // Pattern 1: .../folders/123XYZ...
+    const foldersMatch = input.match(/folders\/([a-zA-Z0-9-_]+)/);
+    if (foldersMatch) {
+      extractedId = foldersMatch[1];
+    } else {
+      // Pattern 2: ...?id=123XYZ...
+      const idMatch = input.match(/id=([a-zA-Z0-9-_]+)/);
+      if (idMatch) {
+        extractedId = idMatch[1];
+      }
+    }
+    setNewFolderId(extractedId);
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this link? The client will lose access.")) return;
     const res = await deleteShare(token, id);
@@ -100,9 +119,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
             />
             <input 
               type="text" 
-              placeholder="Google Drive Folder ID"
+              placeholder="Paste Folder ID or URL here"
               value={newFolderId}
-              onChange={(e) => setNewFolderId(e.target.value)}
+              onChange={handleFolderIdChange}
               className="bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white font-mono text-sm"
             />
             <button 
@@ -114,7 +133,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
             </button>
           </form>
           <p className="text-xs text-slate-500 mt-3 ml-1">
-            * Retrieve the Folder ID from the URL of your Google Drive folder (e.g., drive.google.com/drive/folders/<b>1AbC...</b>)
+            * You can paste the full Google Drive Link, we will extract the ID automatically.
           </p>
         </div>
 
