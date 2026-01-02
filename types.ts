@@ -1,4 +1,5 @@
 
+
 export interface DriveFile {
   id: string;
   name: string;
@@ -19,6 +20,7 @@ export interface FolderContent {
   // Added for persistent branding
   shareLabel?: string;
   shareLogo?: string;
+  nextPageToken?: string;
 }
 
 export interface ShareLink {

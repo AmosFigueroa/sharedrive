@@ -7,7 +7,7 @@ import {
   Folder, FileText, Image as ImageIcon, Video, FileSpreadsheet, 
   Download, Search, Grid, List, ChevronRight, AlertCircle, 
   ArrowLeft, X, ChevronLeft, ZoomIn, ZoomOut, RotateCcw, Home,
-  Sun, Moon, ArrowUp
+  Sun, Moon, ArrowUp, Loader2
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -54,6 +54,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   const [currentFolder, setCurrentFolder] = useState<string>('root');
   const [folderData, setFolderData] = useState<FolderContent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,19 +77,52 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
+  // --- RECURSIVE FETCHING FOR PAGINATION ---
+  const fetchNextPage = async (folderId: string, pageToken: string) => {
+    setLoadingMore(true);
+    const res = await getFolderContents(folderId, null, shareId, pageToken);
+    
+    if (res.success && res.data && 'files' in res.data) {
+       setFolderData(prev => {
+         if (!prev) return null;
+         return {
+           ...prev,
+           files: [...prev.files, ...(res.data as any).files],
+           nextPageToken: (res.data as any).nextPageToken
+         };
+       });
+
+       // Automatically fetch next page if one exists
+       if ((res.data as any).nextPageToken) {
+          fetchNextPage(folderId, (res.data as any).nextPageToken);
+       } else {
+         setLoadingMore(false);
+       }
+    } else {
+      setLoadingMore(false);
+    }
+  };
+
   const fetchData = useCallback(async (folderId: string) => {
     setLoading(true);
     setSearchQuery('');
     setError(null);
     setFailedImages(new Set()); // Reset failed images on new fetch
+    setLoadingMore(false);
     
     // Pass null for token, provide shareId
     const res = await getFolderContents(folderId, null, shareId);
     
     if (res.success && res.data) {
-      setFolderData(res.data);
-      if (res.data.shareLabel) setPageTitle(res.data.shareLabel);
-      if (res.data.shareLogo) setPageLogo(res.data.shareLogo);
+      setFolderData(res.data as FolderContent);
+      if ((res.data as FolderContent).shareLabel) setPageTitle((res.data as FolderContent).shareLabel!);
+      if ((res.data as FolderContent).shareLogo) setPageLogo((res.data as FolderContent).shareLogo);
+      
+      // Check for pagination immediately after first load
+      if ((res.data as FolderContent).nextPageToken) {
+         fetchNextPage(folderId, (res.data as FolderContent).nextPageToken!);
+      }
+
     } else {
       setError(res.error || "This link may have expired or is invalid.");
       setFolderData(null);
@@ -154,8 +188,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     if (file.isFolder) {
       setCurrentFolder(file.id);
     } else {
-      // Logic Update: Always open preview regardless of device.
-      // Download only happens if user clicks the download icon.
       setPreviewFile(file);
     }
   };
@@ -194,14 +226,24 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   const handleDownload = (e: React.MouseEvent | null, file: DriveFile) => {
     e?.stopPropagation();
     startDownload();
-    window.open(file.downloadUrl, '_blank');
+    
+    // Create temporary link to improve mobile reliability
+    const link = document.createElement('a');
+    link.href = file.downloadUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+    }, 100);
   };
 
   const getPreviewUrl = (thumbnailUrl: string) => {
     if (thumbnailUrl.startsWith('data:')) {
       return thumbnailUrl;
     }
-    // High res for lightbox
     return thumbnailUrl.replace(/=s\d+.*$/, '=s0');
   };
 
@@ -331,6 +373,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                 ))}
               </nav>
             </div>
+            
+            {/* Loading More Indicator */}
+            {loadingMore && (
+              <div className="flex items-center gap-2 text-xs text-slate-500 animate-pulse">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Loading more...</span>
+              </div>
+            )}
         </div>
       </header>
 
@@ -405,6 +455,15 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                           <p className="text-sm font-medium text-slate-700 dark:text-slate-300 w-full truncate group-hover:text-blue-600 dark:group-hover:text-white transition-colors">{file.name}</p>
                           <div className="flex justify-between items-center mt-1">
                               <p className="text-xs text-slate-400 dark:text-slate-500">{file.isFolder ? 'Folder' : formatSize(file.size)}</p>
+                              {!file.isFolder && (
+                                <button 
+                                  onClick={(e) => handleDownload(e, file)}
+                                  className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors z-10"
+                                  title="Download"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              )}
                           </div>
                         </div>
                       </>

@@ -1,4 +1,5 @@
 
+
 import { ApiResponse, FolderContent, ShareLink } from '../types';
 import { GAS_WEB_APP_URL, MOCK_DATA } from '../constants';
 
@@ -33,11 +34,11 @@ export const verifyOtp = async (email: string, otp: string): Promise<ApiResponse
   return apiCall({ action: 'verifyOtp', email, otp });
 };
 
-export const getFolderContents = async (folderId: string, token: string | null, shareId?: string): Promise<ApiResponse<FolderContent>> => {
+export const getFolderContents = async (folderId: string, token: string | null, shareId?: string, pageToken?: string): Promise<ApiResponse<FolderContent>> => {
   if (MOCK_DATA) {
      return { success: false, error: "Mock data not fully implemented for shares" };
   }
-  return apiCall({ action: 'getFiles', folderId, token, shareId });
+  return apiCall({ action: 'getFiles', folderId, token, shareId, pageToken });
 };
 
 // --- Share Management APIs ---
