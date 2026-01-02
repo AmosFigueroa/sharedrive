@@ -1,0 +1,5 @@
+{
+  "name": "DriveShare Pro",
+  "description": "A professional, secure client portal for Google Drive folders with OTP authentication and AI-powered search.",
+  "requestFramePermissions": []
+}
