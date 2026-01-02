@@ -2,9 +2,11 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { ShareLink, FolderContent, DriveFile } from '../types';
 import { createShare, getShares, deleteShare, getFolderContents } from '../services/apiService';
+import { useUI } from '../contexts/UIContext';
 import { 
   Plus, Trash2, Copy, ExternalLink, FolderLock, LogOut, Loader2, RefreshCw, 
-  Search, Folder, ChevronRight, X, CheckCircle2, ArrowLeft, CheckSquare, Square, Check, Link as LinkIcon, Image as ImageIcon
+  Search, Folder, ChevronRight, X, CheckCircle2, ArrowLeft, CheckSquare, Square, Check, Link as LinkIcon, Image as ImageIcon,
+  Sun, Moon
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -13,6 +15,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
+  const { showToast, theme, toggleTheme } = useUI();
   const [shares, setShares] = useState<ShareLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -22,8 +25,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   const [newFolderId, setNewFolderId] = useState('');
   const [customPath, setCustomPath] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
-
-  // Picker State
+  
+  const [customPathTouched, setCustomPathTouched] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerCurrentId, setPickerCurrentId] = useState('root');
   const [pickerData, setPickerData] = useState<FolderContent | null>(null);
@@ -60,9 +63,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   };
 
   const toggleFolderSelection = (e: React.MouseEvent, folderId: string) => {
-    e.stopPropagation(); // STOP navigating into the folder
+    e.stopPropagation(); 
     e.preventDefault();
-    
     const newSet = new Set(selectedIds);
     if (newSet.has(folderId)) {
       newSet.delete(folderId);
@@ -76,15 +78,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     if (selectedIds.size > 0) {
       setNewFolderId(Array.from(selectedIds).join(','));
     } else if (pickerCurrentId !== 'root') {
-      // Fallback: if nothing selected specifically but user is IN a folder, select current
       setNewFolderId(pickerCurrentId);
     }
     setShowPicker(false);
-    setSelectedIds(new Set()); // Reset
+    setSelectedIds(new Set()); 
     setPickerCurrentId('root');
   };
 
   // --- Main Logic ---
+
+  const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setNewLabel(val);
+    if (!customPathTouched) {
+      const slug = val.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      setCustomPath(slug);
+    }
+  };
+
+  const handleCustomPathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomPathTouched(true);
+    setCustomPath(e.target.value.replace(/[^a-zA-Z0-9-_]/g, ''));
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,23 +114,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
       setNewFolderId('');
       setCustomPath('');
       setLogoUrl('');
+      setCustomPathTouched(false);
       fetchShares();
+      showToast("Link created successfully!", 'success');
     } else {
-      alert(res.error || "Failed to create share. The custom link name might be taken.");
+      showToast(res.error || "Failed to create share.", 'error');
     }
   };
 
   const handleFolderIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
     let extractedId = input;
-    
-    // Advanced Logic: Detect Multiple URLs or IDs pasted at once
     const matches = [...input.matchAll(/(?:folders\/|id=)([\w-]+)/g)];
-    
     if (matches.length > 0) {
       extractedId = matches.map(m => m[1]).join(',');
     }
-    
     setNewFolderId(extractedId);
   };
 
@@ -124,17 +137,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     const res = await deleteShare(token, id);
     if (res.success) {
       setShares(prev => prev.filter(s => s.id !== id));
+      showToast("Link deleted.", 'info');
+    } else {
+      showToast("Failed to delete link.", 'error');
     }
   };
 
   const copyLink = (shareId: string) => {
     const url = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
     navigator.clipboard.writeText(url);
-    alert("Link copied to clipboard!");
+    showToast("Link copied to clipboard!", 'success');
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 p-6 flex flex-col items-center">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 p-6 flex flex-col items-center transition-colors duration-300">
       
       <div className="w-full max-w-4xl">
         {/* Header */}
@@ -144,152 +160,172 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
                <FolderLock className="w-6 h-6 text-white" />
              </div>
              <div>
-               <h1 className="text-2xl font-bold text-white">Share Manager</h1>
-               <p className="text-sm text-slate-400">Generate secure links for your clients</p>
+               <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Share Manager</h1>
+               <p className="text-sm text-slate-500 dark:text-slate-400">Generate secure links for your clients</p>
              </div>
           </div>
-          <button onClick={onLogout} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors text-sm">
-            <LogOut className="w-4 h-4" /> Logout
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+                onClick={toggleTheme}
+                className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                title="Toggle Theme"
+             >
+                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+             </button>
+            <button onClick={onLogout} className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-lg transition-colors text-sm">
+              <LogOut className="w-4 h-4" /> Logout
+            </button>
+          </div>
         </div>
 
         {/* Create New Share Card */}
-        <div className="glass rounded-2xl p-6 mb-8 border border-slate-700/50">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Plus className="w-5 h-5 text-blue-400" /> Create New Share
+        <div className="glass rounded-2xl p-6 mb-8 border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/20">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+            <Plus className="w-5 h-5 text-blue-500" /> Create New Share
           </h2>
           <form onSubmit={handleCreate} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Client / Label (Page Title)</label>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+               <div className="md:col-span-2">
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Client / Label</label>
                   <input 
                     type="text" 
                     placeholder="e.g. PT Maju Jaya Files"
                     value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    className="w-full bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
+                    onChange={handleLabelChange}
+                    className="w-full bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white transition-all"
                   />
                </div>
                
                <div>
-                 <label className="text-xs text-slate-400 mb-1 block">Custom Link Name (Optional)</label>
-                 <div className="relative">
-                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">?share=</div>
-                   <input 
-                      type="text" 
-                      placeholder="client-name"
-                      value={customPath}
-                      onChange={(e) => setCustomPath(e.target.value.replace(/[^a-zA-Z0-9-_]/g, ''))}
-                      className="w-full bg-slate-800/50 border border-slate-600 rounded-xl pl-16 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
-                    />
+                 <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Logo URL (Optional)</label>
+                 <div className="relative flex gap-2">
+                   <div className="relative flex-1">
+                      <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 w-5 h-5" />
+                      <input 
+                          type="text" 
+                          placeholder="https://..."
+                          value={logoUrl}
+                          onChange={(e) => setLogoUrl(e.target.value)}
+                          className="w-full bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-600 rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white transition-all"
+                        />
+                   </div>
+                   {logoUrl && (
+                      <div className="w-12 h-12 rounded-xl bg-white dark:bg-white/10 flex items-center justify-center overflow-hidden border border-slate-300 dark:border-slate-600 flex-shrink-0">
+                         <img src={logoUrl} alt="Preview" className="w-full h-full object-contain" />
+                      </div>
+                   )}
                  </div>
                </div>
             </div>
 
-            <div>
-               <label className="text-xs text-slate-400 mb-1 block">Logo URL (Optional)</label>
-               <div className="relative">
-                 <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
-                 <input 
-                    type="text" 
-                    placeholder="https://example.com/logo.png"
-                    value={logoUrl}
-                    onChange={(e) => setLogoUrl(e.target.value)}
-                    className="w-full bg-slate-800/50 border border-slate-600 rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Custom Link Name</label>
+                 <div className="relative group">
+                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-mono group-focus-within:text-blue-500">?share=</div>
+                   <input 
+                      type="text" 
+                      placeholder="client-name"
+                      value={customPath}
+                      onChange={handleCustomPathChange}
+                      className="w-full bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-600 rounded-xl pl-16 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white font-mono"
+                    />
+                 </div>
                </div>
-            </div>
 
-            <div className="relative">
-               <label className="text-xs text-slate-400 mb-1 block">Folder ID(s)</label>
-               <input 
-                type="text" 
-                placeholder="Folder ID or paste Drive Link(s)..."
-                value={newFolderId}
-                onChange={handleFolderIdChange}
-                className="w-full bg-slate-800/50 border border-slate-600 rounded-xl pl-4 pr-12 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white font-mono text-sm"
-              />
-              <button 
-                type="button"
-                onClick={() => setShowPicker(true)}
-                className="absolute right-2 top-8 p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
-                title="Browse Drive"
-              >
-                <Search className="w-4 h-4" />
-              </button>
+               <div className="relative">
+                  <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Folder ID(s)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Folder ID or paste Drive Link(s)..."
+                    value={newFolderId}
+                    onChange={handleFolderIdChange}
+                    className="w-full bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-600 rounded-xl pl-4 pr-12 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white font-mono text-sm"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPicker(true)}
+                    className="absolute right-2 top-8 p-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-lg transition-colors"
+                    title="Browse Drive"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+               </div>
             </div>
 
             <button 
               type="submit" 
               disabled={creating || !newLabel || !newFolderId}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2 shadow-lg shadow-blue-500/20"
             >
-              {creating ? <Loader2 className="animate-spin w-5 h-5" /> : "Generate Link"}
+              {creating ? <Loader2 className="animate-spin w-5 h-5" /> : "Generate Secure Link"}
             </button>
           </form>
-          <p className="text-xs text-slate-500 mt-3 ml-1">
-            * <b>Label</b> will be used as the permanent Page Title.<br/>
-            * <b>Custom Link Name</b> creates pretty URLs (e.g. ?share=ProjectA).
-          </p>
         </div>
 
         {/* History List */}
         <div className="flex items-center justify-between mb-4">
-           <h3 className="text-xl font-bold text-white">Active Links</h3>
-           <button onClick={fetchShares} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
-             <RefreshCw className={`w-5 h-5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+           <h3 className="text-xl font-bold text-slate-800 dark:text-white">Active Links</h3>
+           <button onClick={fetchShares} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
+             <RefreshCw className={`w-5 h-5 text-slate-500 dark:text-slate-400 ${loading ? 'animate-spin' : ''}`} />
            </button>
         </div>
 
         {loading && shares.length === 0 ? (
           <div className="text-center py-12 text-slate-500">Loading shares...</div>
         ) : shares.length === 0 ? (
-          <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-800/20">
-            <p className="text-slate-400">No active shared links found.</p>
+          <div className="text-center py-12 border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-2xl bg-slate-100 dark:bg-slate-800/20">
+            <p className="text-slate-500 dark:text-slate-400">No active shared links found.</p>
           </div>
         ) : (
           <div className="grid gap-4">
             {shares.map(share => (
-              <div key={share.id} className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group hover:bg-slate-800/60 transition-colors">
+              <div key={share.id} className="bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 group hover:shadow-md dark:hover:bg-slate-800/60 transition-all">
                 
-                <div className="flex-1 overflow-hidden">
-                   <div className="flex items-center gap-3">
-                      {share.logoUrl && <img src={share.logoUrl} className="w-8 h-8 rounded object-contain bg-white/10" alt="logo" />}
-                      <h4 className="font-bold text-lg text-white mb-1">{share.label}</h4>
+                {/* Logo & Label Section */}
+                <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
+                   <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center flex-shrink-0 border border-slate-200 dark:border-slate-600/50 overflow-hidden">
+                      {share.logoUrl ? (
+                         <img src={share.logoUrl} className="w-full h-full object-contain" alt="logo" />
+                      ) : (
+                         <span className="text-lg font-bold text-slate-400 dark:text-slate-500 uppercase">{share.label.substring(0,2)}</span>
+                      )}
                    </div>
-                   <div className="flex flex-col gap-1 text-xs text-slate-400 font-mono mt-1">
-                     <span className="flex items-center gap-2">
-                        <LinkIcon className="w-3 h-3" /> 
-                        <span className="text-blue-400 bg-blue-500/10 px-1 rounded">?share={share.id}</span>
-                     </span>
-                     <span title={share.folderId} className="truncate max-w-[300px] opacity-70">
-                        Target: {share.folderId}
-                     </span>
+                   
+                   <div className="min-w-0">
+                      <h4 className="font-bold text-lg text-slate-800 dark:text-white truncate">{share.label}</h4>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        <span className="flex items-center gap-1 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono border border-blue-100 dark:border-blue-500/20">
+                           <LinkIcon className="w-3 h-3" /> /{share.id}
+                        </span>
+                        <span className="hidden sm:inline opacity-50">&bull;</span>
+                        <span className="opacity-70 truncate max-w-[150px]">ID: {share.folderId}</span>
+                      </div>
                    </div>
                 </div>
 
-                <div className="flex items-center gap-2 w-full md:w-auto">
+                {/* Actions */}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                    <button 
                      onClick={() => copyLink(share.id)}
-                     className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-700 hover:bg-blue-600 hover:text-white rounded-lg transition-all text-sm font-medium text-slate-300"
+                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 dark:hover:bg-blue-600 hover:text-white dark:hover:text-white rounded-lg transition-all text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-500"
                    >
-                     <Copy className="w-4 h-4" /> Copy Link
+                     <Copy className="w-4 h-4" /> Copy
                    </button>
                    
                    <a 
                      href={`?share=${share.id}`}
                      target="_blank"
-                     className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg"
-                     title="Test Link"
+                     className="p-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600"
+                     title="Open Link"
                    >
                      <ExternalLink className="w-5 h-5" />
                    </a>
 
-                   <div className="w-px h-6 bg-slate-700 mx-1"></div>
-
                    <button 
                      onClick={() => handleDelete(share.id)}
-                     className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                     className="p-2 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-500/30"
                      title="Delete"
                    >
                      <Trash2 className="w-5 h-5" />
@@ -306,12 +342,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
       {/* FOLDER PICKER MODAL */}
       {showPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col shadow-2xl overflow-hidden">
             
-            {/* Modal Header */}
-            <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
-              <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                <Folder className="w-5 h-5 text-blue-400" /> Select Folder(s)
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                <Folder className="w-5 h-5 text-blue-500" /> Select Folder(s)
               </h3>
               <div className="flex items-center gap-3">
                  {selectedIds.size > 0 && (
@@ -321,21 +356,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
                  )}
                  <button 
                     onClick={() => setShowPicker(false)}
-                    className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"
+                    className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   >
                     <X className="w-5 h-5" />
                   </button>
               </div>
             </div>
 
-            {/* Breadcrumbs */}
-            <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center gap-1 text-sm overflow-x-auto whitespace-nowrap scrollbar-hide">
+            <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center gap-1 text-sm overflow-x-auto whitespace-nowrap scrollbar-hide">
               {pickerData?.path.map((p, idx) => (
                 <div key={p.id} className="flex items-center">
-                  {idx > 0 && <ChevronRight className="w-4 h-4 text-slate-600 mx-1" />}
+                  {idx > 0 && <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-600 mx-1" />}
                   <button 
                     onClick={() => setPickerCurrentId(p.id)}
-                    className={`hover:text-blue-400 transition-colors ${idx === pickerData.path.length - 1 ? 'text-white font-bold' : 'text-slate-400'}`}
+                    className={`hover:text-blue-500 dark:hover:text-blue-400 transition-colors ${idx === pickerData.path.length - 1 ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-500 dark:text-slate-400'}`}
                   >
                     {p.name}
                   </button>
@@ -343,8 +377,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
               ))}
             </div>
 
-            {/* Folder List */}
-            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-slate-900">
+            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-white dark:bg-slate-900">
                {pickerLoading ? (
                  <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-3">
                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -352,36 +385,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
                  </div>
                ) : (
                  <div className="space-y-1">
-                   {/* Back Button if not root */}
                    {pickerData?.path.length && pickerData.path.length > 1 && (
                      <button 
                        onClick={() => {
                           const parent = pickerData.path[pickerData.path.length - 2];
                           setPickerCurrentId(parent.id);
                        }}
-                       className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 text-left transition-colors group"
+                       className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 text-left transition-colors group"
                      >
-                       <div className="w-10 h-10 flex items-center justify-center bg-slate-800 rounded-lg group-hover:bg-slate-700">
+                       <div className="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-lg group-hover:bg-slate-200 dark:group-hover:bg-slate-700">
                          <ArrowLeft className="w-5 h-5 text-slate-400" />
                        </div>
-                       <span className="text-slate-400 group-hover:text-slate-200">.. (Back)</span>
+                       <span className="text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200">.. (Back)</span>
                      </button>
                    )}
 
-                   {/* Folders */}
                    {pickerData?.files.filter(f => f.isFolder).map(folder => {
                      const isSelected = selectedIds.has(folder.id);
                      return (
-                      <div key={folder.id} className={`w-full flex items-center gap-3 p-2 rounded-xl border ${isSelected ? 'border-blue-500/50 bg-blue-500/10' : 'border-transparent hover:bg-slate-800'} transition-all group`}>
+                      <div key={folder.id} className={`w-full flex items-center gap-3 p-2 rounded-xl border ${isSelected ? 'border-blue-500/50 bg-blue-50 dark:bg-blue-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'} transition-all group`}>
                         <button 
                           onClick={() => setPickerCurrentId(folder.id)}
                           className="flex-1 flex items-center gap-3 text-left"
                         >
-                          <div className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-800 text-blue-500'}`}>
+                          <div className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-blue-500'}`}>
                             <Folder className="w-5 h-5" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className={`font-medium truncate ${isSelected ? 'text-blue-200' : 'text-slate-200'}`}>{folder.name}</p>
+                            <p className={`font-medium truncate ${isSelected ? 'text-blue-700 dark:text-blue-200' : 'text-slate-700 dark:text-slate-200'}`}>{folder.name}</p>
                             <p className="text-xs text-slate-500">Click to open</p>
                           </div>
                         </button>
@@ -392,10 +423,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
                             p-3 rounded-lg transition-all transform active:scale-95
                             ${isSelected 
                               ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30' 
-                              : 'bg-slate-800 text-slate-500 hover:text-slate-200 hover:bg-slate-700'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
                             }
                           `}
-                          title={isSelected ? "Unselect" : "Select this folder"}
                         >
                           {isSelected ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                         </button>
@@ -405,15 +435,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
                )}
             </div>
             
-            {/* Footer Action */}
-            <div className="p-4 border-t border-slate-800 bg-slate-900">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
               <button
                 onClick={confirmSelection}
                 className={`
                   w-full py-3.5 font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg 
                   ${selectedIds.size > 0 
                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/20' 
-                     : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                     : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300'
                   }
                 `}
               >

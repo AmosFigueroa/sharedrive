@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import Auth from './components/Auth';
@@ -5,8 +6,9 @@ import AdminDashboard from './components/AdminDashboard';
 import ClientDashboard from './components/ClientDashboard';
 import { AuthState } from './types';
 import { GAS_WEB_APP_URL } from './constants';
+import { UIProvider } from './contexts/UIContext';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
     token: null,
@@ -81,6 +83,14 @@ const App: React.FC = () => {
         <Auth onLoginSuccess={handleLoginSuccess} />
       )}
     </>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <UIProvider>
+      <AppContent />
+    </UIProvider>
   );
 };
 

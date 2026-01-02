@@ -53,3 +53,20 @@ export enum ViewMode {
   GRID = 'GRID',
   LIST = 'LIST'
 }
+
+// --- UI CONTEXT TYPES ---
+export type ToastType = 'success' | 'error' | 'info';
+export type Theme = 'dark' | 'light';
+
+export interface ToastMessage {
+  id: string;
+  type: ToastType;
+  message: string;
+}
+
+export interface UIContextType {
+  showToast: (message: string, type?: ToastType) => void;
+  startDownload: () => void;
+  theme: Theme;
+  toggleTheme: () => void;
+}
