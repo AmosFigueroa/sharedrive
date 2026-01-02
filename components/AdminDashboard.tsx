@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { ShareLink } from '../types';
-import { createShare, getShares, deleteShare } from '../services/apiService';
+import { ShareLink, FolderContent, DriveFile } from '../types';
+import { createShare, getShares, deleteShare, getFolderContents } from '../services/apiService';
 import { 
-  Plus, Trash2, Copy, ExternalLink, Link as LinkIcon, 
-  FolderLock, LogOut, Loader2, RefreshCw 
+  Plus, Trash2, Copy, ExternalLink, FolderLock, LogOut, Loader2, RefreshCw, 
+  Search, Folder, ChevronRight, X, CheckCircle2, ArrowLeft 
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -21,6 +21,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   const [newLabel, setNewLabel] = useState('');
   const [newFolderId, setNewFolderId] = useState('');
 
+  // Picker State
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerCurrentId, setPickerCurrentId] = useState('root');
+  const [pickerData, setPickerData] = useState<FolderContent | null>(null);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
   const fetchShares = async () => {
     setLoading(true);
     const res = await getShares(token);
@@ -33,6 +39,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   useEffect(() => {
     fetchShares();
   }, [token]);
+
+  // --- Picker Logic ---
+  useEffect(() => {
+    if (showPicker) {
+      loadPickerFolder(pickerCurrentId);
+    }
+  }, [showPicker, pickerCurrentId]);
+
+  const loadPickerFolder = async (id: string) => {
+    setPickerLoading(true);
+    const res = await getFolderContents(id, token);
+    if (res.success && res.data) {
+      setPickerData(res.data);
+    }
+    setPickerLoading(false);
+  };
+
+  const handlePickerSelect = (folderId: string) => {
+    setNewFolderId(folderId);
+    setShowPicker(false);
+    setPickerCurrentId('root'); // Reset for next time
+  };
+
+  // --- Main Logic ---
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,20 +83,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
 
   const handleFolderIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
-    // Logic to extract ID if a full URL is pasted
+    // Robust Logic to extract ID if a full URL is pasted
     let extractedId = input;
     
-    // Pattern 1: .../folders/123XYZ...
-    const foldersMatch = input.match(/folders\/([a-zA-Z0-9-_]+)/);
-    if (foldersMatch) {
-      extractedId = foldersMatch[1];
-    } else {
-      // Pattern 2: ...?id=123XYZ...
-      const idMatch = input.match(/id=([a-zA-Z0-9-_]+)/);
-      if (idMatch) {
-        extractedId = idMatch[1];
-      }
+    // Match common Drive URL patterns
+    // 1. folders/ID
+    // 2. id=ID
+    // 3. open?id=ID
+    const match = input.match(/(?:folders\/|id=)([\w-]+)/);
+    
+    if (match && match[1]) {
+      extractedId = match[1];
     }
+    
     setNewFolderId(extractedId);
   };
 
@@ -109,31 +138,47 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <Plus className="w-5 h-5 text-blue-400" /> Create New Share
           </h2>
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input 
-              type="text" 
-              placeholder="Client Name / Label"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              className="bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
-            />
-            <input 
-              type="text" 
-              placeholder="Paste Folder ID or URL here"
-              value={newFolderId}
-              onChange={handleFolderIdChange}
-              className="bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white font-mono text-sm"
-            />
-            <button 
-              type="submit" 
-              disabled={creating || !newLabel || !newFolderId}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {creating ? <Loader2 className="animate-spin w-5 h-5" /> : "Generate Link"}
-            </button>
+          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div className="md:col-span-4">
+              <input 
+                type="text" 
+                placeholder="Client Name / Label"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                className="w-full bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white"
+              />
+            </div>
+            
+            <div className="md:col-span-5 relative">
+              <input 
+                type="text" 
+                placeholder="Paste ID or Browse..."
+                value={newFolderId}
+                onChange={handleFolderIdChange}
+                className="w-full bg-slate-800/50 border border-slate-600 rounded-xl pl-4 pr-12 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-white font-mono text-sm"
+              />
+              <button 
+                type="button"
+                onClick={() => setShowPicker(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
+                title="Browse Drive"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="md:col-span-3">
+              <button 
+                type="submit" 
+                disabled={creating || !newLabel || !newFolderId}
+                className="w-full h-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl px-4 py-3 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {creating ? <Loader2 className="animate-spin w-5 h-5" /> : "Generate Link"}
+              </button>
+            </div>
           </form>
           <p className="text-xs text-slate-500 mt-3 ml-1">
-            * You can paste the full Google Drive Link, we will extract the ID automatically.
+            * Paste a Google Drive Link, ID, or use the search icon to browse your folders.
           </p>
         </div>
 
@@ -198,6 +243,107 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
         )}
 
       </div>
+
+      {/* FOLDER PICKER MODAL */}
+      {showPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col shadow-2xl">
+            
+            {/* Modal Header */}
+            <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-800/50 rounded-t-2xl">
+              <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                <Folder className="w-5 h-5 text-blue-400" /> Browse Drive
+              </h3>
+              <button 
+                onClick={() => setShowPicker(false)}
+                className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Breadcrumbs */}
+            <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center gap-1 text-sm overflow-x-auto whitespace-nowrap scrollbar-hide">
+              {pickerData?.path.map((p, idx) => (
+                <div key={p.id} className="flex items-center">
+                  {idx > 0 && <ChevronRight className="w-4 h-4 text-slate-600 mx-1" />}
+                  <button 
+                    onClick={() => setPickerCurrentId(p.id)}
+                    className={`hover:text-blue-400 transition-colors ${idx === pickerData.path.length - 1 ? 'text-white font-bold' : 'text-slate-400'}`}
+                  >
+                    {p.name}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Folder List */}
+            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar bg-slate-900">
+               {pickerLoading ? (
+                 <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-3">
+                   <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                   <p className="text-sm">Loading folders...</p>
+                 </div>
+               ) : (
+                 <div className="space-y-1">
+                   {/* Back Button if not root */}
+                   {pickerData?.path.length && pickerData.path.length > 1 && (
+                     <button 
+                       onClick={() => {
+                          const parent = pickerData.path[pickerData.path.length - 2];
+                          setPickerCurrentId(parent.id);
+                       }}
+                       className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 text-left transition-colors group"
+                     >
+                       <div className="w-10 h-10 flex items-center justify-center bg-slate-800 rounded-lg group-hover:bg-slate-700">
+                         <ArrowLeft className="w-5 h-5 text-slate-400" />
+                       </div>
+                       <span className="text-slate-400 group-hover:text-slate-200">.. (Back)</span>
+                     </button>
+                   )}
+
+                   {/* Folders */}
+                   {pickerData?.files.filter(f => f.isFolder).map(folder => (
+                     <div key={folder.id} className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-slate-800 text-left transition-colors group">
+                       <button 
+                         onClick={() => setPickerCurrentId(folder.id)}
+                         className="flex-1 flex items-center gap-3"
+                       >
+                         <div className="w-10 h-10 flex items-center justify-center bg-blue-500/10 rounded-lg text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                           <Folder className="w-5 h-5" />
+                         </div>
+                         <div className="min-w-0">
+                           <p className="font-medium text-slate-200 truncate">{folder.name}</p>
+                           <p className="text-xs text-slate-500">Folder</p>
+                         </div>
+                       </button>
+
+                       <button 
+                         onClick={() => handlePickerSelect(folder.id)}
+                         className="px-4 py-2 bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 border border-slate-700 hover:border-transparent"
+                       >
+                         Select <CheckCircle2 className="w-3 h-3" />
+                       </button>
+                     </div>
+                   ))}
+
+                   {/* Current Folder Selection Option */}
+                   <div className="mt-4 pt-4 border-t border-slate-800 px-2">
+                      <button
+                        onClick={() => handlePickerSelect(pickerCurrentId)}
+                        className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                      >
+                        Select Current Folder ({pickerData?.name})
+                      </button>
+                   </div>
+                 </div>
+               )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
