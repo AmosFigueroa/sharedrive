@@ -8,7 +8,7 @@ import {
   Folder, FileText, Image as ImageIcon, Video, FileSpreadsheet, 
   Download, Search, Grid, List, ChevronRight, AlertCircle, 
   ArrowLeft, X, ChevronLeft, ZoomIn, ZoomOut, RotateCcw, Home,
-  Sun, Moon, ArrowUp, Loader2
+  Sun, Moon, ArrowUp, Loader2, FolderOpen
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -60,6 +60,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
   const [searchQuery, setSearchQuery] = useState('');
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [emptyImgError, setEmptyImgError] = useState(false);
   
   // Persistent Branding State
   const [pageTitle, setPageTitle] = useState<string>('');
@@ -407,15 +408,28 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
             </div>
           ) : filteredFiles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full m-4">
-               {/* 3D Illustration Empty State */}
-               <div className="relative">
-                  <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-400/5 blur-[50px] rounded-full transform scale-75 animate-pulse"></div>
-                  <img 
-                    src={EMPTY_STATE_IMAGE} 
-                    alt="Empty Folder" 
-                    className="relative w-64 h-64 object-contain animate-float drop-shadow-2xl"
-                  />
-               </div>
+               {/* 3D Illustration Empty State with Fallback */}
+               {emptyImgError ? (
+                  <div className="relative w-48 h-48 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-full mb-6 ring-4 ring-slate-50 dark:ring-slate-900 shadow-xl">
+                    <FolderOpen className="w-24 h-24 text-slate-300 dark:text-slate-600" />
+                    <div className="absolute -bottom-2 -right-2 bg-slate-50 dark:bg-slate-900 rounded-full p-2 shadow-sm">
+                        <div className="bg-slate-200 dark:bg-slate-700 rounded-full p-2">
+                           <X className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+                        </div>
+                    </div>
+                  </div>
+               ) : (
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-400/5 blur-[50px] rounded-full transform scale-75 animate-pulse"></div>
+                    <img 
+                      src={EMPTY_STATE_IMAGE} 
+                      alt="Empty Folder" 
+                      onError={() => setEmptyImgError(true)}
+                      className="relative w-64 h-64 object-contain animate-float drop-shadow-2xl"
+                    />
+                  </div>
+               )}
+               
                <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200 mt-6">Folder is Empty</h3>
                <p className="text-slate-500 dark:text-slate-400 mt-2 max-w-sm text-center">There are no files to display in this folder.</p>
             </div>

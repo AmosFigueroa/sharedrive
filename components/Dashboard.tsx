@@ -6,7 +6,7 @@ import { EMPTY_STATE_IMAGE } from '../constants';
 import { 
   Folder, FileText, Image as ImageIcon, Video, FileSpreadsheet, 
   Download, Search, Grid, List, ChevronRight, LogOut, RefreshCw, 
-  Sparkles, Bot, Send, X, Loader2, Home, AlertCircle 
+  Sparkles, Bot, Send, X, Loader2, Home, AlertCircle, FolderOpen
 } from 'lucide-react';
 import { DEFAULT_ROOT_FOLDER_ID } from '../constants';
 import { GoogleGenAI } from "@google/genai";
@@ -26,6 +26,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userEmail, onLogout }) => 
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<DriveFile | null>(null);
+  const [emptyImgError, setEmptyImgError] = useState(false);
   
   // AI State
   const [showAiPanel, setShowAiPanel] = useState(false);
@@ -38,6 +39,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userEmail, onLogout }) => 
     setLoading(true);
     setSearchQuery('');
     setError(null);
+    setEmptyImgError(false); // Reset error state on new fetch
     
     const res = await getFolderContents(folderId, token);
     
@@ -241,15 +243,28 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userEmail, onLogout }) => 
             </div>
           ) : filteredFiles.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center m-4">
-               {/* 3D Illustration Empty State */}
-               <div className="relative">
-                  <div className="absolute inset-0 bg-blue-500/10 blur-[50px] rounded-full transform scale-75 animate-pulse"></div>
-                  <img 
-                    src={EMPTY_STATE_IMAGE} 
-                    alt="Empty Folder" 
-                    className="relative w-64 h-64 object-contain animate-float drop-shadow-2xl opacity-90"
-                  />
-               </div>
+               {/* 3D Illustration Empty State with Fallback */}
+               {emptyImgError ? (
+                  <div className="relative w-48 h-48 flex items-center justify-center bg-slate-800/50 rounded-full mb-6 ring-4 ring-slate-800 shadow-xl">
+                    <FolderOpen className="w-24 h-24 text-slate-600" />
+                    <div className="absolute -bottom-2 -right-2 bg-slate-900 rounded-full p-2 shadow-sm">
+                        <div className="bg-slate-700 rounded-full p-2">
+                           <X className="w-8 h-8 text-slate-500" />
+                        </div>
+                    </div>
+                  </div>
+               ) : (
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-blue-500/10 blur-[50px] rounded-full transform scale-75 animate-pulse"></div>
+                    <img 
+                      src={EMPTY_STATE_IMAGE} 
+                      alt="Empty Folder" 
+                      onError={() => setEmptyImgError(true)}
+                      className="relative w-64 h-64 object-contain animate-float drop-shadow-2xl opacity-90"
+                    />
+                  </div>
+               )}
+
                <h3 className="text-xl font-bold text-white mt-6">Folder is Empty</h3>
                <p className="text-slate-400 mt-2 max-w-sm text-center">There are no files to display in this folder.</p>
             </div>

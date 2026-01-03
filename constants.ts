@@ -7,8 +7,8 @@ export const DEFAULT_ROOT_FOLDER_ID = "root"; // Or specific ID: "1xSj..."
 
 export const MOCK_DATA = false; // Set to true to test UI without backend
 
-// REPLACE THIS WITH YOUR OWN IMAGE URL IF DESIRED
-export const EMPTY_STATE_IMAGE = "https://cdn3d.iconscout.com/3d/premium/thumb/folder-is-empty-3d-illustration-download-in-png-blend-fbx-gltf-file-formats--no-data-directory-user-interface-pack-illustrations-4720163.png?f=webp";
+// Using reliable GitHub raw content for 3D illustration to prevent broken links
+export const EMPTY_STATE_IMAGE = "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20File%20Folder.png";
 
 export const FILE_ICONS: Record<string, string> = {
   'application/pdf': 'text-red-400',
