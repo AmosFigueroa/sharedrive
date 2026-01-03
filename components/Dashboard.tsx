@@ -260,7 +260,7 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userEmail, onLogout }) => 
                       src={EMPTY_STATE_IMAGE} 
                       alt="Empty Folder" 
                       onError={() => setEmptyImgError(true)}
-                      className="relative w-64 h-64 object-contain animate-float drop-shadow-2xl opacity-90"
+                      className="relative w-48 h-48 object-contain animate-float drop-shadow-2xl opacity-90"
                     />
                   </div>
                )}
