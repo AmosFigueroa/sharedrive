@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { DriveFile, FolderContent, ViewMode } from '../types';
 import { getFolderContents } from '../services/apiService';
 import { useUI } from '../contexts/UIContext';
+import { EMPTY_STATE_IMAGE } from '../constants';
 import { 
   Folder, FileText, Image as ImageIcon, Video, FileSpreadsheet, 
   Download, Search, Grid, List, ChevronRight, AlertCircle, 
@@ -405,9 +406,18 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
               {viewMode === ViewMode.GRID ? <GridSkeleton /> : <ListSkeleton />}
             </div>
           ) : filteredFiles.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500 border-2 border-dashed border-slate-300 dark:border-slate-800/50 rounded-2xl bg-slate-100 dark:bg-slate-800/20 m-4">
-               <Folder className="w-16 h-16 mb-4 opacity-20" />
-               <p className="text-lg">This folder is empty</p>
+            <div className="flex flex-col items-center justify-center h-full m-4">
+               {/* 3D Illustration Empty State */}
+               <div className="relative">
+                  <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-400/5 blur-[50px] rounded-full transform scale-75 animate-pulse"></div>
+                  <img 
+                    src={EMPTY_STATE_IMAGE} 
+                    alt="Empty Folder" 
+                    className="relative w-64 h-64 object-contain animate-float drop-shadow-2xl"
+                  />
+               </div>
+               <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200 mt-6">Folder is Empty</h3>
+               <p className="text-slate-500 dark:text-slate-400 mt-2 max-w-sm text-center">There are no files to display in this folder.</p>
             </div>
           ) : (
             <>

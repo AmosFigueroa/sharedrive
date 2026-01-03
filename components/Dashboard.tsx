@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DriveFile, FolderContent, ViewMode, ChatMessage } from '../types';
 import { getFolderContents } from '../services/apiService';
+import { EMPTY_STATE_IMAGE } from '../constants';
 import { 
   Folder, FileText, Image as ImageIcon, Video, FileSpreadsheet, 
   Download, Search, Grid, List, ChevronRight, LogOut, RefreshCw, 
@@ -239,10 +240,18 @@ const Dashboard: React.FC<DashboardProps> = ({ token, userEmail, onLogout }) => 
               </div>
             </div>
           ) : filteredFiles.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-700/50 rounded-2xl bg-slate-800/20">
-               <Folder className="w-16 h-16 mb-4 opacity-30" />
-               <p className="text-lg font-medium">This folder is empty</p>
-               <p className="text-sm">No files matching your criteria were found.</p>
+            <div className="h-full flex flex-col items-center justify-center m-4">
+               {/* 3D Illustration Empty State */}
+               <div className="relative">
+                  <div className="absolute inset-0 bg-blue-500/10 blur-[50px] rounded-full transform scale-75 animate-pulse"></div>
+                  <img 
+                    src={EMPTY_STATE_IMAGE} 
+                    alt="Empty Folder" 
+                    className="relative w-64 h-64 object-contain animate-float drop-shadow-2xl opacity-90"
+                  />
+               </div>
+               <h3 className="text-xl font-bold text-white mt-6">Folder is Empty</h3>
+               <p className="text-slate-400 mt-2 max-w-sm text-center">There are no files to display in this folder.</p>
             </div>
           ) : (
             <div className={`

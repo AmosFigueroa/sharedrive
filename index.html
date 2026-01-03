@@ -84,6 +84,15 @@
       .animate-slide-in {
         animation: slide-in-right 0.3s ease-out forwards;
       }
+
+      @keyframes float {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+        100% { transform: translateY(0px); }
+      }
+      .animate-float {
+        animation: float 4s ease-in-out infinite;
+      }
       
       /* Skeleton Shimmer - Slowed down to 5s */
       .shimmer {
