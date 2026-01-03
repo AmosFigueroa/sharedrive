@@ -70,6 +70,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
 
   // Lightbox State
   const [previewFile, setPreviewFile] = useState<DriveFile | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState(false);
   
   // Image Interaction State
   const [transform, setTransform] = useState<TransformState>({ scale: 1, x: 0, y: 0 });
@@ -135,11 +136,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   }, [currentFolder, fetchData]);
 
   useEffect(() => {
+    // Reset state when file changes
     setTransform({ scale: 1, x: 0, y: 0 });
+    setIsImageLoading(true); 
   }, [previewFile]);
 
   const handleImageError = (fileId: string) => {
     setFailedImages(prev => new Set(prev).add(fileId));
+    setIsImageLoading(false);
   };
 
   // Handle Scroll to toggle button visibility
@@ -224,7 +228,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   }, [previewFile, imageFiles]);
 
   const handleDownload = (e: React.MouseEvent | null, file: DriveFile) => {
-    e?.stopPropagation();
+    // Critical for mobile: Stop propagation so we don't open the file preview
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    
     startDownload();
     
     // Create temporary link to improve mobile reliability
@@ -244,7 +253,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     if (thumbnailUrl.startsWith('data:')) {
       return thumbnailUrl;
     }
-    return thumbnailUrl.replace(/=s\d+.*$/, '=s0');
+    // Use slightly higher resolution for preview than grid thumbnail
+    return thumbnailUrl.replace(/=s\d+.*$/, '=s1600'); 
   };
 
   const getEmbedUrl = (url: string) => {
@@ -458,7 +468,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                               {!file.isFolder && (
                                 <button 
                                   onClick={(e) => handleDownload(e, file)}
-                                  className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors z-10"
+                                  className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors z-20"
                                   title="Download"
                                 >
                                   <Download className="w-4 h-4" />
@@ -497,7 +507,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                           {!file.isFolder ? (
                               <button 
                                 onClick={(e) => handleDownload(e, file)} 
-                                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-blue-500 transition-colors"
+                                className="p-3 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-blue-500 transition-colors z-20"
                               >
                                 <Download className="w-4 h-4" />
                               </button>
@@ -578,31 +588,43 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
 
           <div 
              ref={imageContainerRef}
-             className="w-full h-full flex items-center justify-center p-0 sm:p-4 overflow-hidden"
+             className="w-full h-full flex items-center justify-center p-0 sm:p-4 overflow-hidden relative"
              onClick={(e) => e.stopPropagation()} 
              onWheel={handleWheel}
           >
              {previewFile.mimeType.startsWith('image/') ? (
                 previewFile.thumbnailUrl && !failedImages.has(previewFile.id) ? (
-                  <div 
-                    className="w-full h-full flex items-center justify-center cursor-move"
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                  >
-                    <img 
-                      src={getPreviewUrl(previewFile.thumbnailUrl)} 
-                      alt={previewFile.name} 
-                      onError={() => handleImageError(previewFile.id)}
-                      className="max-w-full max-h-full object-contain transition-transform duration-75 ease-out select-none"
-                      draggable={false}
-                      style={{
-                        transform: `scale(${transform.scale}) translate(${transform.x}px, ${transform.y}px)`,
-                        cursor: transform.scale > 1 ? 'grab' : 'default'
-                      }}
-                    />
-                  </div>
+                  <>
+                    {/* Loading Spinner for Image Transition */}
+                    {isImageLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center z-10">
+                         <div className="bg-black/50 p-4 rounded-full backdrop-blur-md">
+                           <Loader2 className="w-8 h-8 text-white animate-spin" />
+                         </div>
+                      </div>
+                    )}
+                    
+                    <div 
+                      className="w-full h-full flex items-center justify-center cursor-move"
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                    >
+                      <img 
+                        src={getPreviewUrl(previewFile.thumbnailUrl)} 
+                        alt={previewFile.name} 
+                        onLoad={() => setIsImageLoading(false)}
+                        onError={() => handleImageError(previewFile.id)}
+                        className={`max-w-full max-h-full object-contain transition-all duration-200 ease-out select-none ${isImageLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+                        draggable={false}
+                        style={{
+                          transform: `scale(${transform.scale}) translate(${transform.x}px, ${transform.y}px)`,
+                          cursor: transform.scale > 1 ? 'grab' : 'default'
+                        }}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <div className="text-white flex flex-col items-center">
                     <ImageIcon className="w-20 h-20 text-slate-600 mb-4" />
