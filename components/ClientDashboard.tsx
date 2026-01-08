@@ -8,7 +8,7 @@ import {
   Folder, FileText, Image as ImageIcon, Video, FileSpreadsheet, 
   Download, Search, Grid, List, ChevronRight, AlertCircle, 
   ArrowLeft, X, ChevronLeft, ZoomIn, ZoomOut, RotateCcw, Home,
-  Sun, Moon, ArrowUp, Loader2, FolderOpen
+  Sun, Moon, ArrowUp, Loader2, FolderOpen, CheckSquare, Square, Check
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -23,7 +23,7 @@ interface TransformState {
 
 // --- SKELETON COMPONENTS ---
 const GridSkeleton = () => (
-  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 animate-pulse">
+  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 animate-pulse">
     {[...Array(12)].map((_, i) => (
       <div key={i} className="rounded-2xl bg-white dark:bg-slate-800/30 ring-1 ring-slate-200 dark:ring-white/5 p-3 flex flex-col aspect-[3/4]">
         <div className="flex-1 w-full rounded-xl bg-slate-200 dark:bg-slate-800 mb-3 shimmer"></div>
@@ -62,6 +62,10 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [emptyImgError, setEmptyImgError] = useState(false);
   
+  // Multi-Select State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+
   // Persistent Branding State
   const [pageTitle, setPageTitle] = useState<string>('');
   const [pageLogo, setPageLogo] = useState<string | undefined>(undefined);
@@ -112,6 +116,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     setError(null);
     setFailedImages(new Set()); // Reset failed images on new fetch
     setLoadingMore(false);
+    setSelectedFileIds(new Set()); // Reset selections
+    setIsSelectionMode(false);
     
     // Pass null for token, provide shareId
     const res = await getFolderContents(folderId, null, shareId);
@@ -190,7 +196,30 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
 
   const imageFiles = filteredFiles.filter(f => f.mimeType.startsWith('image/') && f.thumbnailUrl);
 
+  const toggleSelection = (e: React.MouseEvent, fileId: string) => {
+    e.stopPropagation();
+    const newSet = new Set(selectedFileIds);
+    if (newSet.has(fileId)) {
+      newSet.delete(fileId);
+      if (newSet.size === 0) setIsSelectionMode(false);
+    } else {
+      newSet.add(fileId);
+      setIsSelectionMode(true);
+    }
+    setSelectedFileIds(newSet);
+  };
+
   const handleFileClick = (file: DriveFile) => {
+    if (isSelectionMode && !file.isFolder) {
+      // In selection mode, clicking the card toggles selection (except folders for now)
+      const newSet = new Set(selectedFileIds);
+      if (newSet.has(file.id)) newSet.delete(file.id);
+      else newSet.add(file.id);
+      setSelectedFileIds(newSet);
+      if (newSet.size === 0) setIsSelectionMode(false);
+      return;
+    }
+
     if (file.isFolder) {
       setCurrentFolder(file.id);
     } else {
@@ -230,7 +259,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
   }, [previewFile, imageFiles]);
 
   const handleDownload = (e: React.MouseEvent | null, file: DriveFile) => {
-    // Critical for mobile: Stop propagation so we don't open the file preview
     if (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -238,7 +266,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     
     startDownload();
     
-    // Create temporary link to improve mobile reliability
     const link = document.createElement('a');
     link.href = file.downloadUrl;
     link.target = '_blank';
@@ -251,11 +278,36 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
     }, 100);
   };
 
+  const handleBulkDownload = () => {
+    if (selectedFileIds.size === 0) return;
+    
+    startDownload();
+    showToast(`Starting download for ${selectedFileIds.size} files...`, 'info');
+
+    const filesToDownload = filteredFiles.filter(f => selectedFileIds.has(f.id));
+    
+    // Download files with a slight stagger to prevent browser blocking
+    filesToDownload.forEach((file, index) => {
+      setTimeout(() => {
+        const link = document.createElement('a');
+        link.href = file.downloadUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => document.body.removeChild(link), 100);
+      }, index * 800);
+    });
+
+    setSelectedFileIds(new Set());
+    setIsSelectionMode(false);
+  };
+
   const getPreviewUrl = (thumbnailUrl: string) => {
     if (thumbnailUrl.startsWith('data:')) {
       return thumbnailUrl;
     }
-    // Use slightly higher resolution for preview than grid thumbnail
     return thumbnailUrl.replace(/=s\d+.*$/, '=s1600'); 
   };
 
@@ -312,23 +364,26 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
       
       {/* Header */}
       <header className="glass z-20 border-b border-slate-200 dark:border-slate-700/50 flex-shrink-0 flex flex-col">
-        {/* Top Bar: Title & Search */}
-        <div className="px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        {/* Top Bar: Layout optimized for mobile */}
+        <div className="p-4 sm:px-6 min-h-[4rem] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          
+          {/* Logo & Title */}
+          <div className="flex items-center gap-4 w-full sm:w-auto">
              {pageLogo && (
                 <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/10 p-1">
                    <img src={pageLogo} alt="Logo" className="max-w-full max-h-full object-contain" />
                 </div>
              )}
-             <div className="flex flex-col">
-              <span className="font-bold text-lg text-slate-800 dark:text-white tracking-tight">
+             <div className="flex flex-col min-w-0">
+              <span className="font-bold text-lg text-slate-800 dark:text-white tracking-tight truncate leading-tight">
                 {pageTitle || (folderData ? folderData.name : 'Loading...')}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-             <div className="relative w-full max-w-xs hidden sm:block">
+          {/* Controls: Search, Theme, View, Select */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+             <div className="relative flex-1 sm:flex-none sm:w-64">
                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                <input 
                  type="text" 
@@ -339,21 +394,35 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                />
              </div>
              
+             {/* Divider hidden on mobile */}
              <div className="h-6 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block"></div>
 
              {/* Theme Toggle */}
              <button 
                 onClick={toggleTheme}
-                className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
                 title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
              >
                 {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
              </button>
 
-             <div className="flex gap-1 bg-slate-200 dark:bg-slate-800 rounded-lg p-1">
+             {/* View Toggle */}
+             <div className="flex gap-1 bg-slate-200 dark:bg-slate-800 rounded-lg p-1 flex-shrink-0">
                <button onClick={() => setViewMode(ViewMode.GRID)} className={`p-1.5 rounded-md transition-colors ${viewMode === ViewMode.GRID ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}><Grid className="w-4 h-4"/></button>
                <button onClick={() => setViewMode(ViewMode.LIST)} className={`p-1.5 rounded-md transition-colors ${viewMode === ViewMode.LIST ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}><List className="w-4 h-4"/></button>
              </div>
+
+             {/* Selection Mode Toggle */}
+             <button 
+                onClick={() => {
+                  setIsSelectionMode(!isSelectionMode);
+                  if (isSelectionMode) setSelectedFileIds(new Set());
+                }}
+                className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isSelectionMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'}`}
+                title="Select Files"
+             >
+               {isSelectionMode ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+             </button>
           </div>
         </div>
 
@@ -386,7 +455,6 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
               </nav>
             </div>
             
-            {/* Loading More Indicator */}
             {loadingMore && (
               <div className="flex items-center gap-2 text-xs text-slate-500 animate-pulse">
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -400,7 +468,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
       <main 
         ref={mainContentRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar bg-slate-50 dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950"
+        className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 custom-scrollbar bg-slate-50 dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 relative"
       >
           {loading ? (
             <div className="h-full w-full">
@@ -438,6 +506,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
               {/* LIST VIEW HEADERS (Desktop Only) */}
               {viewMode === ViewMode.LIST && (
                 <div className="hidden sm:flex items-center gap-4 px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 mb-2 uppercase tracking-wider">
+                  {isSelectionMode && <div className="w-8"></div>}
                   <div className="flex-1 pl-12">Name</div>
                   <div className="w-32">Date Modified</div>
                   <div className="w-24 text-right pr-8">Size</div>
@@ -447,109 +516,152 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
 
               <div className={`
                 ${viewMode === ViewMode.GRID 
-                  ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6' 
+                  ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6' 
                   : 'flex flex-col space-y-2'
                 }
               `}>
-                {filteredFiles.map((file) => (
-                  <div 
-                    key={file.id}
-                    onClick={() => handleFileClick(file)}
-                    className={`
-                      group relative transition-all duration-300 cursor-pointer overflow-hidden
-                      ${viewMode === ViewMode.GRID 
-                        ? 'rounded-2xl bg-white dark:bg-slate-800/30 hover:bg-white dark:hover:bg-slate-800 shadow-sm hover:shadow-xl dark:hover:shadow-black/50 ring-1 ring-slate-200 dark:ring-white/5 hover:ring-blue-500/50 p-3 flex flex-col aspect-[3/4]' 
-                        : 'rounded-lg p-3 flex items-center justify-between bg-white dark:bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                      }
-                    `}
-                  >
-                    {viewMode === ViewMode.GRID ? (
-                      <>
-                        <div className="flex-1 w-full flex items-center justify-center relative overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-900/50 mb-3 shadow-inner">
-                          {file.thumbnailUrl && !failedImages.has(file.id) ? (
-                            <img 
-                              src={file.thumbnailUrl} 
-                              alt={file.name} 
-                              onError={() => handleImageError(file.id)}
-                              className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" 
-                            />
-                          ) : (
-                              <div className="transform group-hover:scale-110 transition-transform duration-300">
-                                {getFileIcon(file.mimeType, "w-16 h-16")}
-                              </div>
-                          )}
-                          
-                          {file.isFolder && (
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <span className="bg-black/30 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white border border-white/10">Open</span>
-                              </div>
-                          )}
-                        </div>
-                        <div className="w-full">
-                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 w-full truncate group-hover:text-blue-600 dark:group-hover:text-white transition-colors">{file.name}</p>
-                          <div className="flex justify-between items-center mt-1">
-                              <p className="text-xs text-slate-400 dark:text-slate-500">{file.isFolder ? 'Folder' : formatSize(file.size)}</p>
-                              {!file.isFolder && (
-                                <button 
-                                  onClick={(e) => handleDownload(e, file)}
-                                  className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors z-20"
-                                  title="Download"
-                                >
-                                  <Download className="w-4 h-4" />
-                                </button>
-                              )}
+                {filteredFiles.map((file) => {
+                  const isSelected = selectedFileIds.has(file.id);
+                  return (
+                    <div 
+                      key={file.id}
+                      onClick={() => handleFileClick(file)}
+                      className={`
+                        group relative transition-all duration-300 cursor-pointer overflow-hidden
+                        ${viewMode === ViewMode.GRID 
+                          ? `rounded-2xl bg-white dark:bg-slate-800/30 shadow-sm hover:shadow-xl dark:hover:shadow-black/50 ring-1 p-3 flex flex-col aspect-[3/4] ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'ring-slate-200 dark:ring-white/5 hover:ring-blue-500/50 hover:bg-white dark:hover:bg-slate-800'}`
+                          : `rounded-lg p-3 flex items-center justify-between border ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500' : 'bg-white dark:bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800 border-transparent hover:border-slate-200 dark:hover:border-slate-700'}`
+                        }
+                      `}
+                    >
+                      {/* Checkbox Overlay */}
+                      {!file.isFolder && (
+                         <div 
+                           onClick={(e) => toggleSelection(e, file.id)}
+                           className={`
+                             absolute top-2 right-2 z-30 p-1.5 rounded-full transition-all
+                             ${viewMode === ViewMode.GRID ? '' : 'left-2 right-auto top-1/2 -translate-y-1/2'}
+                             ${isSelected ? 'bg-blue-500 text-white opacity-100' : 'bg-black/20 text-white opacity-0 group-hover:opacity-100'}
+                             ${isSelectionMode ? 'opacity-100' : ''}
+                           `}
+                         >
+                           {isSelected ? <Check className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                         </div>
+                      )}
+
+                      {viewMode === ViewMode.GRID ? (
+                        <>
+                          <div className="flex-1 w-full flex items-center justify-center relative overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-900/50 mb-3 shadow-inner">
+                            {file.thumbnailUrl && !failedImages.has(file.id) ? (
+                              <img 
+                                src={file.thumbnailUrl} 
+                                alt={file.name} 
+                                onError={() => handleImageError(file.id)}
+                                className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110" 
+                              />
+                            ) : (
+                                <div className="transform group-hover:scale-110 transition-transform duration-300">
+                                  {getFileIcon(file.mimeType, "w-16 h-16")}
+                                </div>
+                            )}
+                            
+                            {file.isFolder && (
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                  <span className="bg-black/30 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white border border-white/10">Open</span>
+                                </div>
+                            )}
                           </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {/* List View - Name Column */}
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                            <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                              {getFileIcon(file.mimeType, "w-5 h-5")}
+                          <div className="w-full">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 w-full line-clamp-2 leading-tight h-10 group-hover:text-blue-600 dark:group-hover:text-white transition-colors">
+                              {file.name}
+                            </p>
+                            <div className="flex justify-between items-center mt-1">
+                                <p className="text-xs text-slate-400 dark:text-slate-500">{file.isFolder ? 'Folder' : formatSize(file.size)}</p>
+                                {!file.isFolder && !isSelectionMode && (
+                                  <button 
+                                    onClick={(e) => handleDownload(e, file)}
+                                    className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors z-20"
+                                    title="Download"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </button>
+                                )}
                             </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-sm text-slate-700 dark:text-slate-200 truncate font-medium">{file.name}</span>
-                              {/* Mobile Meta Data (Visible only on small screens) */}
-                              <span className="sm:hidden text-xs text-slate-400 dark:text-slate-500">
-                                {file.isFolder ? 'Folder' : `${file.lastUpdated} • ${formatSize(file.size)}`}
-                              </span>
-                            </div>
-                        </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* List View - Name Column */}
+                          <div className={`flex items-center gap-4 flex-1 min-w-0 ${isSelectionMode ? 'pl-8' : ''}`}>
+                              <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                                {getFileIcon(file.mimeType, "w-5 h-5")}
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm text-slate-700 dark:text-slate-200 truncate font-medium">{file.name}</span>
+                                {/* Mobile Meta Data (Visible only on small screens) */}
+                                <span className="sm:hidden text-xs text-slate-400 dark:text-slate-500">
+                                  {file.isFolder ? 'Folder' : `${file.lastUpdated} • ${formatSize(file.size)}`}
+                                </span>
+                              </div>
+                          </div>
 
-                        {/* List View - Desktop Columns */}
-                        <div className="hidden sm:block w-32 text-sm text-slate-500 dark:text-slate-400 truncate">
-                          {file.lastUpdated}
-                        </div>
-                        
-                        <div className="hidden sm:block w-24 text-sm text-slate-500 dark:text-slate-400 text-right font-mono">
-                          {file.isFolder ? '-' : formatSize(file.size)}
-                        </div>
+                          {/* List View - Desktop Columns */}
+                          <div className="hidden sm:block w-32 text-sm text-slate-500 dark:text-slate-400 truncate">
+                            {file.lastUpdated}
+                          </div>
+                          
+                          <div className="hidden sm:block w-24 text-sm text-slate-500 dark:text-slate-400 text-right font-mono">
+                            {file.isFolder ? '-' : formatSize(file.size)}
+                          </div>
 
-                        {/* Action Icon */}
-                        <div className="w-8 flex justify-end">
-                          {!file.isFolder ? (
-                              <button 
-                                onClick={(e) => handleDownload(e, file)} 
-                                className="p-3 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-blue-500 transition-colors z-20"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                          ) : (
-                              <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-600" />
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+                          {/* Action Icon */}
+                          <div className="w-8 flex justify-end">
+                            {!file.isFolder ? (
+                                <button 
+                                  onClick={(e) => isSelectionMode ? toggleSelection(e, file.id) : handleDownload(e, file)} 
+                                  className="p-3 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-blue-500 transition-colors z-20"
+                                >
+                                  {isSelectionMode ? null : <Download className="w-4 h-4" />}
+                                </button>
+                            ) : (
+                                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-600" />
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
       </main>
 
-      {/* Scroll to Top Button */}
-      {showScrollTop && (
+      {/* FLOATING ACTION BAR FOR MULTI-SELECT DOWNLOAD */}
+      {selectedFileIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40 bg-slate-900 text-white rounded-full px-6 py-3 shadow-2xl flex items-center gap-4 animate-fade-in-up border border-slate-700">
+           <span className="font-semibold text-sm whitespace-nowrap">{selectedFileIds.size} Selected</span>
+           <div className="h-5 w-px bg-slate-700"></div>
+           <button 
+             onClick={handleBulkDownload}
+             className="flex items-center gap-2 text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors"
+           >
+             <Download className="w-4 h-4" /> Download All
+           </button>
+           <button 
+             onClick={() => {
+               setSelectedFileIds(new Set());
+               setIsSelectionMode(false);
+             }}
+             className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
+           >
+             <X className="w-4 h-4" />
+           </button>
+        </div>
+      )}
+
+      {/* Scroll to Top Button (Hidden if selection bar is active) */}
+      {showScrollTop && selectedFileIds.size === 0 && (
         <button
           onClick={scrollToTop}
           className="fixed bottom-6 right-6 p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg hover:shadow-blue-500/50 transition-all transform hover:scale-110 z-40 animate-fade-in-up"
