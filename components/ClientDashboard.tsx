@@ -23,7 +23,7 @@ interface TransformState {
 
 // --- SKELETON COMPONENTS ---
 const GridSkeleton = () => (
-  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 animate-pulse">
+  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-6 animate-pulse">
     {[...Array(12)].map((_, i) => (
       <div key={i} className="rounded-2xl bg-white dark:bg-slate-800/30 ring-1 ring-slate-200 dark:ring-white/5 p-3 flex flex-col aspect-[3/4]">
         <div className="flex-1 w-full rounded-xl bg-slate-200 dark:bg-slate-800 mb-3 shimmer"></div>
@@ -370,7 +370,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
           {/* Logo & Title */}
           <div className="flex items-center gap-4 w-full sm:w-auto">
              {pageLogo && (
-                <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/10 p-1">
+                <div className="flex-shrink-0 h-11 w-11 flex items-center justify-center bg-slate-100 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/10 p-1">
                    <img src={pageLogo} alt="Logo" className="max-w-full max-h-full object-contain" />
                 </div>
              )}
@@ -382,57 +382,58 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
           </div>
 
           {/* Controls: Search, Theme, View, Select */}
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-             <div className="relative flex-1 sm:flex-none sm:w-64">
+          <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+             <div className="relative flex-1 min-w-[140px] sm:w-64">
                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                <input 
                  type="text" 
                  value={searchQuery}
                  onChange={(e) => setSearchQuery(e.target.value)}
                  placeholder="Search files..." 
-                 className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-full py-2 pl-9 pr-4 text-sm focus:ring-1 focus:ring-blue-500 outline-none text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                 className="w-full bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-full py-2.5 pl-9 pr-4 text-sm focus:ring-1 focus:ring-blue-500 outline-none text-slate-800 dark:text-slate-200 placeholder-slate-400"
                />
              </div>
              
-             {/* Divider hidden on mobile */}
-             <div className="h-6 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block"></div>
+             <div className="h-8 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block"></div>
 
-             {/* Theme Toggle */}
-             <button 
-                onClick={toggleTheme}
-                className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
-                title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
-             >
-                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-             </button>
+             <div className="flex items-center gap-2 flex-shrink-0 ml-auto sm:ml-0">
+               {/* Theme Toggle */}
+               <button 
+                  onClick={toggleTheme}
+                  className="p-2.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 sm:border-none bg-white dark:bg-slate-800/50 sm:bg-transparent"
+                  title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+               >
+                  {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+               </button>
 
-             {/* View Toggle */}
-             <div className="flex gap-1 bg-slate-200 dark:bg-slate-800 rounded-lg p-1 flex-shrink-0">
-               <button onClick={() => setViewMode(ViewMode.GRID)} className={`p-1.5 rounded-md transition-colors ${viewMode === ViewMode.GRID ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}><Grid className="w-4 h-4"/></button>
-               <button onClick={() => setViewMode(ViewMode.LIST)} className={`p-1.5 rounded-md transition-colors ${viewMode === ViewMode.LIST ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}><List className="w-4 h-4"/></button>
+               {/* View Toggle */}
+               <div className="flex gap-1 bg-slate-200 dark:bg-slate-800 rounded-lg p-1.5 h-11 items-center">
+                 <button onClick={() => setViewMode(ViewMode.GRID)} className={`p-1.5 rounded-md transition-colors ${viewMode === ViewMode.GRID ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}><Grid className="w-5 h-5"/></button>
+                 <button onClick={() => setViewMode(ViewMode.LIST)} className={`p-1.5 rounded-md transition-colors ${viewMode === ViewMode.LIST ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}><List className="w-5 h-5"/></button>
+               </div>
+
+               {/* Selection Mode Toggle */}
+               <button 
+                  onClick={() => {
+                    setIsSelectionMode(!isSelectionMode);
+                    if (isSelectionMode) setSelectedFileIds(new Set());
+                  }}
+                  className={`p-2.5 h-11 w-11 flex items-center justify-center rounded-lg transition-colors border border-slate-200 dark:border-slate-700 sm:border-none ${isSelectionMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'bg-white dark:bg-slate-800/50 sm:bg-transparent text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'}`}
+                  title="Select Files"
+               >
+                 {isSelectionMode ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+               </button>
              </div>
-
-             {/* Selection Mode Toggle */}
-             <button 
-                onClick={() => {
-                  setIsSelectionMode(!isSelectionMode);
-                  if (isSelectionMode) setSelectedFileIds(new Set());
-                }}
-                className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isSelectionMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'}`}
-                title="Select Files"
-             >
-               {isSelectionMode ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-             </button>
           </div>
         </div>
 
         {/* Bottom Bar: Breadcrumbs */}
-        <div className="px-4 sm:px-6 py-2 bg-slate-100/50 dark:bg-slate-800/30 flex items-center gap-4 border-t border-slate-200 dark:border-white/5">
-            <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide flex-1">
+        <div className="px-4 sm:px-6 py-2.5 bg-slate-100/50 dark:bg-slate-800/30 flex items-center gap-4 border-t border-slate-200 dark:border-white/5">
+            <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide flex-1 py-1">
               {!isRoot && !loading && (
                 <button 
                   onClick={handleNavigateUp}
-                  className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 transition-colors mr-1"
+                  className="p-1.5 rounded-full bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-300 transition-colors mr-1 shadow-sm border border-slate-200 dark:border-slate-600"
                   title="Back"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -445,9 +446,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                     {idx > 0 && <ChevronRight className="w-4 h-4 mx-1 flex-shrink-0 text-slate-400 dark:text-slate-600" />}
                     <button 
                       onClick={() => setCurrentFolder(p.id)}
-                      className={`hover:text-blue-500 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5 px-2 py-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 ${idx === folderData.path.length - 1 ? 'text-slate-900 dark:text-white font-medium bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm' : ''}`}
+                      className={`hover:text-blue-500 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 ${idx === folderData.path.length - 1 ? 'text-slate-900 dark:text-white font-medium bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm' : ''}`}
                     >
-                      {idx === 0 ? <Home className="w-3 h-3" /> : null}
+                      {idx === 0 ? <Home className="w-3.5 h-3.5" /> : null}
                       {p.name}
                     </button>
                   </React.Fragment>
@@ -468,7 +469,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
       <main 
         ref={mainContentRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 custom-scrollbar bg-slate-50 dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 relative"
+        className="flex-1 overflow-y-auto p-3 sm:p-6 pb-28 custom-scrollbar bg-slate-50 dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 relative"
       >
           {loading ? (
             <div className="h-full w-full">
@@ -516,7 +517,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
 
               <div className={`
                 ${viewMode === ViewMode.GRID 
-                  ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6' 
+                  ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-6' 
                   : 'flex flex-col space-y-2'
                 }
               `}>
@@ -534,19 +535,19 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                         }
                       `}
                     >
-                      {/* Checkbox Overlay */}
+                      {/* Checkbox Overlay - Larger touch target */}
                       {!file.isFolder && (
-                         <div 
+                         <button 
                            onClick={(e) => toggleSelection(e, file.id)}
                            className={`
-                             absolute top-2 right-2 z-30 p-1.5 rounded-full transition-all
+                             absolute top-2 right-2 z-30 p-2 rounded-full transition-all
                              ${viewMode === ViewMode.GRID ? '' : 'left-2 right-auto top-1/2 -translate-y-1/2'}
-                             ${isSelected ? 'bg-blue-500 text-white opacity-100' : 'bg-black/20 text-white opacity-0 group-hover:opacity-100'}
-                             ${isSelectionMode ? 'opacity-100' : ''}
+                             ${isSelected ? 'bg-blue-500 text-white opacity-100 scale-100' : 'bg-black/30 backdrop-blur-sm text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}
+                             ${isSelectionMode ? 'opacity-100 scale-100' : ''}
                            `}
                          >
                            {isSelected ? <Check className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                         </div>
+                         </button>
                       )}
 
                       {viewMode === ViewMode.GRID ? (
@@ -567,7 +568,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                             
                             {file.isFolder && (
                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                  <span className="bg-black/30 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white border border-white/10">Open</span>
+                                  <span className="bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-medium text-white border border-white/10 shadow-lg">Open</span>
                                 </div>
                             )}
                           </div>
@@ -575,12 +576,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                             <p className="text-sm font-medium text-slate-700 dark:text-slate-300 w-full line-clamp-2 leading-tight h-10 group-hover:text-blue-600 dark:group-hover:text-white transition-colors">
                               {file.name}
                             </p>
-                            <div className="flex justify-between items-center mt-1">
+                            <div className="flex justify-between items-center mt-2">
                                 <p className="text-xs text-slate-400 dark:text-slate-500">{file.isFolder ? 'Folder' : formatSize(file.size)}</p>
                                 {!file.isFolder && !isSelectionMode && (
                                   <button 
                                     onClick={(e) => handleDownload(e, file)}
-                                    className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors z-20"
+                                    className="p-2.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors z-20 active:scale-95"
                                     title="Download"
                                   >
                                     <Download className="w-4 h-4" />
@@ -592,14 +593,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                       ) : (
                         <>
                           {/* List View - Name Column */}
-                          <div className={`flex items-center gap-4 flex-1 min-w-0 ${isSelectionMode ? 'pl-8' : ''}`}>
+                          <div className={`flex items-center gap-4 flex-1 min-w-0 ${isSelectionMode ? 'pl-10' : ''}`}>
                               <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                                {getFileIcon(file.mimeType, "w-5 h-5")}
+                                {getFileIcon(file.mimeType, "w-6 h-6")}
                               </div>
                               <div className="flex flex-col min-w-0">
                                 <span className="text-sm text-slate-700 dark:text-slate-200 truncate font-medium">{file.name}</span>
                                 {/* Mobile Meta Data (Visible only on small screens) */}
-                                <span className="sm:hidden text-xs text-slate-400 dark:text-slate-500">
+                                <span className="sm:hidden text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                                   {file.isFolder ? 'Folder' : `${file.lastUpdated} • ${formatSize(file.size)}`}
                                 </span>
                               </div>
@@ -615,16 +616,16 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
                           </div>
 
                           {/* Action Icon */}
-                          <div className="w-8 flex justify-end">
+                          <div className="w-10 flex justify-end">
                             {!file.isFolder ? (
                                 <button 
                                   onClick={(e) => isSelectionMode ? toggleSelection(e, file.id) : handleDownload(e, file)} 
-                                  className="p-3 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-blue-500 transition-colors z-20"
+                                  className="p-3 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-blue-500 transition-colors z-20 active:bg-slate-300 dark:active:bg-slate-600"
                                 >
-                                  {isSelectionMode ? null : <Download className="w-4 h-4" />}
+                                  {isSelectionMode ? null : <Download className="w-5 h-5" />}
                                 </button>
                             ) : (
-                                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-600" />
+                                <ChevronRight className="w-5 h-5 text-slate-400 dark:text-slate-600" />
                             )}
                           </div>
                         </>
@@ -637,26 +638,33 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
           )}
       </main>
 
-      {/* FLOATING ACTION BAR FOR MULTI-SELECT DOWNLOAD */}
+      {/* FLOATING ACTION BAR FOR MULTI-SELECT DOWNLOAD - Higher z-index and padding for mobile safe area */}
       {selectedFileIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40 bg-slate-900 text-white rounded-full px-6 py-3 shadow-2xl flex items-center gap-4 animate-fade-in-up border border-slate-700">
-           <span className="font-semibold text-sm whitespace-nowrap">{selectedFileIds.size} Selected</span>
-           <div className="h-5 w-px bg-slate-700"></div>
-           <button 
-             onClick={handleBulkDownload}
-             className="flex items-center gap-2 text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors"
-           >
-             <Download className="w-4 h-4" /> Download All
-           </button>
-           <button 
-             onClick={() => {
-               setSelectedFileIds(new Set());
-               setIsSelectionMode(false);
-             }}
-             className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
-           >
-             <X className="w-4 h-4" />
-           </button>
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-[60] w-[90%] max-w-md">
+          <div className="bg-slate-900/95 backdrop-blur-md text-white rounded-2xl p-2 shadow-2xl flex items-center justify-between border border-slate-700/50 ring-1 ring-white/10">
+             <div className="flex items-center gap-3 pl-4">
+               <div className="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">{selectedFileIds.size}</div>
+               <span className="font-medium text-sm">Selected</span>
+             </div>
+             
+             <div className="flex items-center gap-1">
+               <button 
+                 onClick={handleBulkDownload}
+                 className="flex items-center gap-2 text-sm font-bold bg-white text-slate-900 hover:bg-slate-200 px-4 py-2.5 rounded-xl transition-colors active:scale-95"
+               >
+                 <Download className="w-4 h-4" /> Download
+               </button>
+               <button 
+                 onClick={() => {
+                   setSelectedFileIds(new Set());
+                   setIsSelectionMode(false);
+                 }}
+                 className="p-2.5 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
+               >
+                 <X className="w-5 h-5" />
+               </button>
+             </div>
+          </div>
         </div>
       )}
 
@@ -664,7 +672,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
       {showScrollTop && selectedFileIds.size === 0 && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-6 right-6 p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg hover:shadow-blue-500/50 transition-all transform hover:scale-110 z-40 animate-fade-in-up"
+          className="fixed bottom-8 right-6 p-4 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg hover:shadow-blue-500/50 transition-all transform hover:scale-110 z-40 animate-fade-in-up active:scale-90"
           title="Back to Top"
         >
           <ArrowUp className="w-6 h-6" />
@@ -679,7 +687,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
         >
           <button 
             onClick={() => setPreviewFile(null)}
-            className="absolute top-4 right-4 p-2 bg-slate-800/50 hover:bg-slate-700 rounded-full text-white transition-colors z-[60]"
+            className="absolute top-4 right-4 p-3 bg-slate-800/50 hover:bg-slate-700 rounded-full text-white transition-colors z-[60]"
           >
             <X className="w-6 h-6" />
           </button>
@@ -688,13 +696,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
             <>
               <button 
                 onClick={handlePrevImage}
-                className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/5 hover:bg-white/20 rounded-full text-white transition-all hover:scale-110 z-[60]"
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-4 bg-white/5 hover:bg-white/20 rounded-full text-white transition-all hover:scale-110 z-[60] active:scale-95"
               >
                 <ChevronLeft className="w-8 h-8" />
               </button>
               <button 
                 onClick={handleNextImage}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/5 hover:bg-white/20 rounded-full text-white transition-all hover:scale-110 z-[60]"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-4 bg-white/5 hover:bg-white/20 rounded-full text-white transition-all hover:scale-110 z-[60] active:scale-95"
               >
                 <ChevronRight className="w-8 h-8" />
               </button>
@@ -703,22 +711,22 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ shareId }) => {
 
           {previewFile.mimeType.startsWith('image/') && (
             <div className="absolute top-4 left-4 flex gap-2 z-[60]" onClick={(e) => e.stopPropagation()}>
-              <button onClick={zoomIn} className="p-2 bg-slate-800/80 rounded-lg text-white hover:bg-blue-600 transition-colors"><ZoomIn className="w-5 h-5" /></button>
-              <button onClick={zoomOut} className="p-2 bg-slate-800/80 rounded-lg text-white hover:bg-blue-600 transition-colors"><ZoomOut className="w-5 h-5" /></button>
-              <button onClick={resetZoom} className="p-2 bg-slate-800/80 rounded-lg text-white hover:bg-blue-600 transition-colors"><RotateCcw className="w-5 h-5" /></button>
+              <button onClick={zoomIn} className="p-3 bg-slate-800/80 rounded-lg text-white hover:bg-blue-600 transition-colors active:scale-95"><ZoomIn className="w-5 h-5" /></button>
+              <button onClick={zoomOut} className="p-3 bg-slate-800/80 rounded-lg text-white hover:bg-blue-600 transition-colors active:scale-95"><ZoomOut className="w-5 h-5" /></button>
+              <button onClick={resetZoom} className="p-3 bg-slate-800/80 rounded-lg text-white hover:bg-blue-600 transition-colors active:scale-95"><RotateCcw className="w-5 h-5" /></button>
             </div>
           )}
 
-          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex items-end justify-between pointer-events-none z-[60]">
-             <div className="pointer-events-auto">
-                <h3 className="text-white font-bold text-lg drop-shadow-md">{previewFile.name}</h3>
+          <div className="absolute bottom-0 left-0 right-0 p-6 pb-8 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex items-end justify-between pointer-events-none z-[60]">
+             <div className="pointer-events-auto max-w-[60%]">
+                <h3 className="text-white font-bold text-lg drop-shadow-md truncate">{previewFile.name}</h3>
                 <p className="text-slate-300 text-sm drop-shadow-md">{formatSize(previewFile.size)}</p>
              </div>
              <button 
                onClick={(e) => handleDownload(e, previewFile)}
-               className="pointer-events-auto px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl flex items-center gap-2 transition-all shadow-lg hover:shadow-blue-500/50"
+               className="pointer-events-auto px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl flex items-center gap-2 transition-all shadow-lg hover:shadow-blue-500/50 active:scale-95"
              >
-               <Download className="w-5 h-5" /> Download
+               <Download className="w-5 h-5" /> <span className="hidden sm:inline">Download</span>
              </button>
           </div>
 
